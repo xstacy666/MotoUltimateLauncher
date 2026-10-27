@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep stock Quickstep paging intact and implement a safe iOS-style stacked-card transform."""
+"""Keep stock Quickstep paging intact and implement a stronger iOS-style stacked-card transform."""
 from pathlib import Path
 import re
 import sys
@@ -12,12 +12,12 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# Recents: restore stock paging and scrolling behavior. Only clear residual transforms;
-# do not calculate card positions or offsets in ModStack.
+# Recents: stock mode clears transforms; iOS 26 stacked applies scale + vertical offset +
+# depth + mild alpha so cards feel like a stacked pile while keeping horizontal paging.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
-    .locals 15
+    .locals 20
     :try_start_0
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
     move-result-object v0
@@ -29,7 +29,7 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     move-result v0
     if-lez v0, :done
     int-to-float v1, v0
-    const/high16 v2, 0x40000000
+    const/high16 v2, 0x40000000    # 2.0f
     div-float/2addr v1, v2
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getScrollX()I
     move-result v3
@@ -44,16 +44,20 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     instance-of v7, v6, Lcom/android/quickstep/views/TaskView;
     if-eqz v7, :next
     if-nez v8, :stacked
+    # Stock mode: force clean transforms
     const/4 v9, 0x0
     invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setRotationX(F)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
-    const/high16 v9, 0x3f800000
+    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationY(F)V
+    const/high16 v9, 0x3f800000    # 1.0f
     invoke-virtual {v6, v9}, Landroid/view/View;->setScaleX(F)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setScaleY(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setAlpha(F)V
     goto :next
     :stacked
+    # Distance of card center from viewport center (normalized 0..1+)
     invoke-virtual {v6}, Landroid/view/View;->getX()F
     move-result v7
     invoke-virtual {v6}, Landroid/view/View;->getWidth()I
@@ -66,20 +70,33 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     invoke-static {v7}, Ljava/lang/Math;->abs(F)F
     move-result v9
     div-float/2addr v9, v1
-    const/high16 v10, 0x3f800000
+    const/high16 v10, 0x3f800000    # 1.0f
     invoke-static {v9, v10}, Ljava/lang/Math;->min(FF)F
     move-result v9
-    const v10, 0x3dcccccd
+    # Scale: 1.0 at center -> \~0.72 at edge (stronger stacked feel)
+    const v10, 0x3e8f5c29    # 0.28f
     mul-float/2addr v10, v9
-    const/high16 v11, 0x3f800000
+    const/high16 v11, 0x3f800000    # 1.0f
     sub-float/2addr v11, v10
     invoke-virtual {v6, v11}, Landroid/view/View;->setScaleX(F)V
     invoke-virtual {v6, v11}, Landroid/view/View;->setScaleY(F)V
-    const/high16 v10, 0x3f800000
+    # Vertical offset: push off-center cards slightly down (stack illusion)
+    const/high16 v10, 0x42400000    # 48.0f
+    mul-float/2addr v10, v9
+    invoke-virtual {v6, v10}, Landroid/view/View;->setTranslationY(F)V
+    # Depth: higher Z for nearer cards
+    const/high16 v10, 0x3f800000    # 1.0f
     sub-float/2addr v10, v9
-    const/high16 v12, 0x41c00000
+    const/high16 v12, 0x42480000    # 50.0f
     mul-float/2addr v10, v12
     invoke-virtual {v6, v10}, Landroid/view/View;->setTranslationZ(F)V
+    # Mild alpha fade for distant cards
+    const/high16 v10, 0x3f800000    # 1.0f
+    const v12, 0x3e4ccccd    # 0.2f
+    mul-float/2addr v12, v9
+    sub-float/2addr v10, v12
+    invoke-virtual {v6, v10}, Landroid/view/View;->setAlpha(F)V
+    # Never apply rotation (avoids extreme 3D distortion)
     const/4 v10, 0x0
     invoke-virtual {v6, v10}, Landroid/view/View;->setRotationY(F)V
     invoke-virtual {v6, v10}, Landroid/view/View;->setRotationX(F)V
@@ -116,7 +133,7 @@ params_method = r""".method public static params(I)[F
         0x0
         0x0
         0x0
-        0x41c00000
+        0x42480000
     .end array-data
 .end method"""
 stack, count = re.subn(
@@ -141,9 +158,8 @@ arrays_text = replace_string_array(arrays_text, "mod_recents_entries", ["Stock",
 arrays_text = replace_string_array(arrays_text, "mod_recents_values", ["0", "1"])
 arrays_path.write_text(arrays_text)
 
-
 # Dock: don't skip drawing the glass/background merely because Hotseat's alpha
-# briefly drops during swipe transitions. The parent still composites the view alpha.
+# briefly drops during swipe transitions.
 dock_path = find_smali("com/android/launcher3/DockBlur.smali")
 dock = dock_path.read_text()
 alpha_gate = re.compile(
@@ -161,4 +177,4 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Applied two-mode Recents (Stock/iOS 26 stacked), safe card scaling, and Dock Studio swipe-fade drawing.")
+print("Applied improved iOS 26 stacked Recents (scale + Y offset + depth + alpha) and Dock Studio swipe-fade fix.")
