@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep stock Quickstep paging intact and implement a safe iOS-style stacked-card transform."""
+"""Preserve native Quickstep transforms while restoring Recents spacing and Icon Lab build patches."""
 from pathlib import Path
 import re
 import sys
@@ -12,90 +12,16 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# Recents: restore stock paging and scrolling behavior. Only clear residual transforms;
-# do not calculate card positions or offsets in ModStack.
+# Quickstep must own TaskView transforms: custom per-frame transforms conflict with
+# Recents transition animations. Keep this callback inert, but preserve the native
+# parameter preset values below because Quickstep uses them for card spacing.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
-apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
-    .locals 15
-    :try_start_0
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
-    move-result-object v0
-    const-string v1, "mod_recents_style"
-    const/4 v2, 0x0
-    invoke-static {v0, v1, v2}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
-    move-result v8
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getWidth()I
-    move-result v0
-    if-lez v0, :done
-    int-to-float v1, v0
-    const/high16 v2, 0x40000000
-    div-float/2addr v1, v2
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getScrollX()I
-    move-result v3
-    int-to-float v3, v3
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getChildCount()I
-    move-result v4
-    const/4 v5, 0x0
-    :loop
-    if-ge v5, v4, :done
-    invoke-virtual {p0, v5}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
-    move-result-object v6
-    instance-of v7, v6, Lcom/android/quickstep/views/TaskView;
-    if-eqz v7, :next
-    if-nez v8, :stacked
-    const/4 v9, 0x0
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationX(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
-    const/high16 v9, 0x3f800000
-    invoke-virtual {v6, v9}, Landroid/view/View;->setScaleX(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setScaleY(F)V
-    goto :next
-    :stacked
-    invoke-virtual {v6}, Landroid/view/View;->getX()F
-    move-result v7
-    invoke-virtual {v6}, Landroid/view/View;->getWidth()I
-    move-result v9
-    div-int/lit8 v9, v9, 0x2
-    int-to-float v9, v9
-    add-float/2addr v7, v9
-    sub-float/2addr v7, v3
-    sub-float/2addr v7, v1
-    invoke-static {v7}, Ljava/lang/Math;->abs(F)F
-    move-result v9
-    div-float/2addr v9, v1
-    const/high16 v10, 0x3f800000
-    invoke-static {v9, v10}, Ljava/lang/Math;->min(FF)F
-    move-result v9
-    const v10, 0x3dcccccd
-    mul-float/2addr v10, v9
-    const/high16 v11, 0x3f800000
-    sub-float/2addr v11, v10
-    invoke-virtual {v6, v11}, Landroid/view/View;->setScaleX(F)V
-    invoke-virtual {v6, v11}, Landroid/view/View;->setScaleY(F)V
-    const/high16 v10, 0x3f800000
-    sub-float/2addr v10, v9
-    const/high16 v12, 0x41c00000
-    mul-float/2addr v10, v12
-    invoke-virtual {v6, v10}, Landroid/view/View;->setTranslationZ(F)V
-    const/4 v10, 0x0
-    invoke-virtual {v6, v10}, Landroid/view/View;->setRotationY(F)V
-    invoke-virtual {v6, v10}, Landroid/view/View;->setRotationX(F)V
-    invoke-virtual {v6, v10}, Landroid/view/View;->setRotation(F)V
-    :next
-    add-int/lit8 v5, v5, 0x1
-    goto :loop
-    :done
-    return-void
-    :try_end_0
-    .catch Ljava/lang/Throwable; {:try_start_0 .. :try_end_0} :catch_0
-    :catch_0
-    move-exception v0
+apply_method = """.method public static apply(Landroid/view/ViewGroup;)V
+    .locals 0
+    # Do not overwrite TaskView transforms during Quickstep paging/transition frames.
     return-void
 .end method"""
-
 stack, count = re.subn(
     r"(?s)\.method public static apply\(Landroid/view/ViewGroup;\)V.*?\.end method",
     apply_method, stack, count=1
@@ -103,7 +29,9 @@ stack, count = re.subn(
 if count != 1:
     raise SystemExit("Could not replace ModStack.apply")
 
-params_method = r""".method public static params(I)[F
+# Stock (0) keeps the native zero-offset preset; iOS (1) retains its 24dp
+# spacing preset so cards do not collapse onto one another.
+params_method = """.method public static params(I)[F
     .locals 1
     const/4 v0, 0x4
     new-array v0, v0, [F
@@ -124,10 +52,10 @@ stack, count = re.subn(
     params_method, stack, count=1
 )
 if count != 1:
-    raise SystemExit("Could not replace ModStack.params")
+    raise SystemExit("Could not restore ModStack.params spacing preset")
 stack_path.write_text(stack)
 
-# Keep exactly two user-facing Recents choices: Stock and iOS 26 stacked.
+# Keep exactly two user-facing Recents choices.
 arrays_path = root / "res/values/arrays.xml"
 arrays_text = arrays_path.read_text()
 def replace_string_array(source, name, items):
@@ -141,6 +69,26 @@ arrays_text = replace_string_array(arrays_text, "mod_recents_entries", ["Stock",
 arrays_text = replace_string_array(arrays_text, "mod_recents_values", ["0", "1"])
 arrays_path.write_text(arrays_text)
 
+# Default to Stock for first launch; users can still select iOS 26 stacked.
+prefs_path = root / "res/xml/launcher_preferences.xml"
+prefs = prefs_path.read_text()
+key_pos = prefs.find('key="mod_recents_style"')
+if key_pos < 0:
+    key_pos = prefs.find('android:key="mod_recents_style"')
+if key_pos < 0:
+    raise SystemExit("Could not find mod_recents_style preference")
+tag_start = prefs.rfind("<", 0, key_pos)
+tag_end = prefs.find(">", key_pos)
+if tag_start < 0 or tag_end < 0:
+    raise SystemExit("Could not locate Recents preference XML tag")
+tag = prefs[tag_start:tag_end + 1]
+if 'defaultValue="0"' not in tag and 'android:defaultValue="0"' not in tag:
+    tag_new, n = re.subn(r'((?:android:)?defaultValue=")[^"]*(")', r'\g<1>0\2', tag, count=1)
+    if n == 0:
+        # Insert a default only if this preference doesn't declare one.
+        tag_new = tag[:-1] + ' android:defaultValue="0">'
+    prefs = prefs[:tag_start] + tag_new + prefs[tag_end + 1:]
+    prefs_path.write_text(prefs)
 
 # Dock: don't skip drawing the glass/background merely because Hotseat's alpha
 # briefly drops during swipe transitions. The parent still composites the view alpha.
@@ -161,4 +109,4 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Applied two-mode Recents (Stock/iOS 26 stacked), safe card scaling, and Dock Studio swipe-fade drawing.")
+print("Preserved Quickstep animation ownership, restored Recents spacing presets, defaulted Recents to Stock, and applied Dock Studio swipe-fade drawing.")
