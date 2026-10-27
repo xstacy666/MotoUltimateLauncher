@@ -18,6 +18,9 @@ replacements = {
     "res/values-night/styles.xml": {
         "@android:color/accent_device_default_dark": "@color/accent_material_dark",
     },
+    "res/layout/taskbar_divider_popup_menu.xml": {
+        "@android:string/config_carrierAppInstallDialogComponent": "sans-serif",
+    },
 }
 for rel, pairs in replacements.items():
     path = root / rel
@@ -36,6 +39,7 @@ for path in (root / "res").rglob("*.xml"):
         "@android:dimen/navigation_bar_height",
         "@android:color/accent_device_default_light",
         "@android:color/accent_device_default_dark",
+        "@android:string/config_carrierAppInstallDialogComponent",
     ):
         if marker in text:
             remaining.append(f"{path}: {marker}")
