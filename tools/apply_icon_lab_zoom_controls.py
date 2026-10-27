@@ -9,11 +9,13 @@ draw_method = r""".method public static draw(Landroid/graphics/drawable/Drawable
     .locals 14
 
     :try_start_0
+    move-object/from16 v13, p2
+
     const-string v0, "mod_icon_shape"
 
     const/4 v1, 0x0
 
-    invoke-static {p2, v0, v1}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
+    invoke-static {v13, v0, v1}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
 
     move-result v0
 
@@ -21,7 +23,7 @@ draw_method = r""".method public static draw(Landroid/graphics/drawable/Drawable
 
     const/16 v2, 0x64
 
-    invoke-static {p2, v1, v2}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
+    invoke-static {v13, v1, v2}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
 
     move-result v1
 
@@ -29,7 +31,7 @@ draw_method = r""".method public static draw(Landroid/graphics/drawable/Drawable
 
     const/4 v3, 0x0
 
-    invoke-static {p2, v2, v3}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
+    invoke-static {v13, v2, v3}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
 
     move-result v2
 
@@ -75,7 +77,7 @@ draw_method = r""".method public static draw(Landroid/graphics/drawable/Drawable
 
     iget v9, v5, Landroid/graphics/Rect;->bottom:I
 
-    invoke-static {v4, v6, v7, v8, v9, v1, v2}, Lcom/android/launcher3/ModShape;->adjustForegroundBounds(Landroid/graphics/drawable/Drawable;IIIIII)V
+    invoke-static {v4, v5, v1, v2}, Lcom/android/launcher3/ModShape;->adjustForegroundBounds(Landroid/graphics/drawable/Drawable;Landroid/graphics/Rect;II)V
 
     :draw_default_masked
     invoke-virtual {p0, p1}, Landroid/graphics/drawable/Drawable;->draw(Landroid/graphics/Canvas;)V
@@ -150,7 +152,11 @@ draw_method = r""".method public static draw(Landroid/graphics/drawable/Drawable
 
     if-eqz v9, :cond_foreground_done
 
-    invoke-static {v9, v10, v11, v12, v13, v1, v2}, Lcom/android/launcher3/ModShape;->adjustForegroundBounds(Landroid/graphics/drawable/Drawable;IIIIII)V
+    new-instance v4, Landroid/graphics/Rect;
+
+    invoke-direct {v4, v10, v11, v12, v13}, Landroid/graphics/Rect;-><init>(IIII)V
+
+    invoke-static {v9, v4, v1, v2}, Lcom/android/launcher3/ModShape;->adjustForegroundBounds(Landroid/graphics/drawable/Drawable;Landroid/graphics/Rect;II)V
 
     invoke-virtual {v9, p1}, Landroid/graphics/drawable/Drawable;->draw(Landroid/graphics/Canvas;)V
 
@@ -172,27 +178,31 @@ draw_method = r""".method public static draw(Landroid/graphics/drawable/Drawable
     return-void
 .end method"""
 
-helper_method = r""".method public static adjustForegroundBounds(Landroid/graphics/drawable/Drawable;IIIIII)V
+helper_method = r""".method public static adjustForegroundBounds(Landroid/graphics/drawable/Drawable;Landroid/graphics/Rect;II)V
     .locals 11
 
     # Scale the foreground around its center; inset is a percentage of each edge.
-    sub-int v0, p3, p1
+    iget v0, p1, Landroid/graphics/Rect;->right:I
+    iget v1, p1, Landroid/graphics/Rect;->left:I
+    sub-int v0, v0, v1
     int-to-float v0, v0
 
     const/high16 v1, 0x3f000000    # 0.5f
     mul-float v1, v0, v1
 
-    int-to-float v2, p5
+    int-to-float v2, p2
     const/high16 v3, 0x42c80000    # 100.0f
     div-float/2addr v2, v3
     mul-float/2addr v1, v2
 
-    int-to-float v4, p6
+    int-to-float v4, p3
     mul-float v4, v0, v4
     div-float/2addr v4, v3
     sub-float/2addr v1, v4
 
-    add-int v5, p1, p3
+    iget v5, p1, Landroid/graphics/Rect;->left:I
+    iget v6, p1, Landroid/graphics/Rect;->right:I
+    add-int v5, v5, v6
     int-to-float v5, v5
     const/high16 v6, 0x40000000    # 2.0f
     div-float/2addr v5, v6
@@ -202,23 +212,27 @@ helper_method = r""".method public static adjustForegroundBounds(Landroid/graphi
     add-float v8, v5, v1
     float-to-int v8, v8
 
-    sub-int v0, p4, p2
+    iget v0, p1, Landroid/graphics/Rect;->bottom:I
+    iget v2, p1, Landroid/graphics/Rect;->top:I
+    sub-int v0, v0, v2
     int-to-float v0, v0
 
     const/high16 v1, 0x3f000000    # 0.5f
     mul-float v1, v0, v1
 
-    int-to-float v2, p5
+    int-to-float v2, p2
     const/high16 v3, 0x42c80000    # 100.0f
     div-float/2addr v2, v3
     mul-float/2addr v1, v2
 
-    int-to-float v4, p6
+    int-to-float v4, p3
     mul-float v4, v0, v4
     div-float/2addr v4, v3
     sub-float/2addr v1, v4
 
-    add-int v5, p2, p4
+    iget v5, p1, Landroid/graphics/Rect;->top:I
+    iget v6, p1, Landroid/graphics/Rect;->bottom:I
+    add-int v5, v5, v6
     int-to-float v5, v5
     const/high16 v6, 0x40000000    # 2.0f
     div-float/2addr v5, v6
