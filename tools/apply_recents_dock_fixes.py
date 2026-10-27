@@ -65,10 +65,10 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     sub-float/2addr v7, v1
     int-to-float v9, v0
     div-float/2addr v7, v9
-    const/high16 v9, -0x40000000
+    const/high16 v9, -0x40800000    # -1.0f
     invoke-static {v7, v9}, Ljava/lang/Math;->max(FF)F
     move-result v7
-    const/high16 v9, 0x40000000
+    const/high16 v9, 0x3f800000    # 1.0f
     invoke-static {v7, v9}, Ljava/lang/Math;->min(FF)F
     move-result v7
 
