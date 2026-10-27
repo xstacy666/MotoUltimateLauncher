@@ -12,6 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Android build tools and inspect original resources
+        run: |
+          set -euo pipefail
+          sdkmanager --licenses >/dev/null || true
+          sdkmanager "build-tools;35.0.0"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump resources source/MotoLauncher3_Ultimate.apk > original-resource-table.txt
+          grep -n -E "mod_icon_shape|mod_dock_style|launcher_preferences" original-resource-table.txt | head -100 > custom-resource-check.txt || true
       - name: Extract and inventory patched source
         shell: bash
         run: |
