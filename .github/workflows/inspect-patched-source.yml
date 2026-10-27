@@ -1,6 +1,9 @@
 name: Inspect patched launcher source
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/inspect-patched-source.yml'
 permissions:
   contents: read
 jobs:
