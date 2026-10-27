@@ -60,6 +60,7 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     invoke-virtual {v5, v6}, Landroid/view/View;->setRotationY(F)V
     invoke-virtual {v5, v6}, Landroid/view/View;->setRotationX(F)V
     invoke-virtual {v5, v6}, Landroid/view/View;->setRotation(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setTranslationX(F)V
     invoke-virtual {v5, v6}, Landroid/view/View;->setTranslationZ(F)V
     invoke-virtual {v5, v6}, Landroid/view/View;->setTranslationY(F)V
     const/high16 v6, 0x3f800000    # 1.0f
@@ -85,23 +86,23 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     invoke-static {v6, v7}, Ljava/lang/Math;->min(FF)F
     move-result v6
 
-    const v7, 0x3e4ccccd    # 0.2f
+    const v7, 0x3eb33333    # 0.35f
     mul-float v7, v7, v6
     const/high16 v8, 0x3f800000    # 1.0f
     sub-float v7, v8, v7
     invoke-virtual {v5, v7}, Landroid/view/View;->setScaleX(F)V
     invoke-virtual {v5, v7}, Landroid/view/View;->setScaleY(F)V
 
-    const/high16 v7, 0x42000000    # 32.0f
+    const/high16 v7, 0x42c80000    # 100.0f
     mul-float v7, v7, v6
     invoke-virtual {v5, v7}, Landroid/view/View;->setTranslationY(F)V
 
     sub-float v7, v8, v6
-    const/high16 v9, 0x42200000    # 40.0f
+    const/high16 v9, 0x428c0000    # 70.0f
     mul-float v7, v7, v9
     invoke-virtual {v5, v7}, Landroid/view/View;->setTranslationZ(F)V
 
-    const v7, 0x3e4ccccd    # 0.2f
+    const v7, 0x3f000000    # 0.5f
     mul-float v7, v7, v6
     sub-float v7, v8, v7
     invoke-virtual {v5, v7}, Landroid/view/View;->setAlpha(F)V
