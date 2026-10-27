@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'source/MotoLauncher3_Ultimate_patched_sources.zip'
+      - 'source/**'
       - '.github/workflows/build-launcher.yml'
 
 permissions:
@@ -34,6 +34,7 @@ jobs:
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           test -n "$SDK_ROOT"
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "build-tools;35.0.0"
           test -x "$SDK_ROOT/build-tools/35.0.0/apksigner"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
@@ -54,14 +55,47 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f source/MotoLauncher3_Ultimate_patched_sources.zip || {
-            echo "::error::Upload source/MotoLauncher3_Ultimate_patched_sources.zip to the repository first."
-            exit 1
-          }
           mkdir -p work
-          unzip -q source/MotoLauncher3_Ultimate_patched_sources.zip -d work
-          DECODED="$(find work -type f -name apktool.yml -print -quit | xargs -r dirname)"
-          test -n "$DECODED" || { echo "::error::No apktool.yml found in source archive"; exit 1; }
+          DECODED=""
+
+          # Prefer an extracted project if one was committed; otherwise accept
+          # the documented archive and common alternate archive names.
+          for candidate in source/decoded_v2 source/decoded source; do
+            if [ -f "$candidate/apktool.yml" ]; then
+              DECODED="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$DECODED" ]; then
+            ARCHIVE=""
+            for candidate in \
+              source/MotoLauncher3_Ultimate_patched_sources.zip \
+              source/MotoLauncher3_Ultimate_Patched_All.zip \
+              source/moto-decoded.zip; do
+              if [ -f "$candidate" ]; then
+                ARCHIVE="$candidate"
+                break
+              fi
+            done
+            if [ -z "$ARCHIVE" ]; then
+              ARCHIVE="$(find source -maxdepth 1 -type f -name '*.zip' -print -quit 2>/dev/null || true)"
+            fi
+            if [ -z "$ARCHIVE" ]; then
+              echo "::error::No decoded source found. Upload the patched Apktool project (apktool.yml plus smali/res files) under source/, either extracted or as a ZIP."
+              echo "Expected archive: source/MotoLauncher3_Ultimate_patched_sources.zip"
+              exit 1
+            fi
+            echo "Using source archive: $ARCHIVE"
+            unzip -q "$ARCHIVE" -d work
+            DECODED="$(find work -type f -name apktool.yml -print -quit | xargs -r dirname)"
+          fi
+
+          if [ -z "$DECODED" ] || [ ! -f "$DECODED/apktool.yml" ]; then
+            echo "::error::No valid Apktool project found (apktool.yml missing)."
+            exit 1
+          fi
+          echo "Building project at: $DECODED"
           echo "DECODED=$DECODED" >> "$GITHUB_ENV"
 
       - name: Build APK without rebuilding OEM resources
