@@ -1,0 +1,33 @@
+name: Inspect patched launcher source
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract and inventory patched source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/source
+          unzip -q source/MotoLauncher3_Ultimate_Patched_All.zip -d work/source
+          find work/source -type f | sort > source-file-list.txt
+          find work/source -type f -name '*.smali' | wc -l > smali-count.txt
+          grep -RilE 'mod_icon|icon.?shape|icon.?pack|dock.?blur|dock.?style|ModStack|animation|folder|recents' work/source --include='*.smali' --include='*.xml' --include='*.json' --include='*.txt' > relevant-files.txt || true
+          mkdir -p inspection
+          cp source-file-list.txt smali-count.txt relevant-files.txt inspection/
+          cp -a work/source inspection/full-source
+          tar -czf patched-source-inspection.tar.gz inspection
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patched-source-inspection
+          path: |
+            patched-source-inspection.tar.gz
+            source-file-list.txt
+            smali-count.txt
+            relevant-files.txt
+          if-no-files-found: error
+          retention-days: 7
