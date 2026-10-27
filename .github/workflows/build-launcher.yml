@@ -1,4 +1,4 @@
-name: Build Moto Launcher APK
+name: Build Moto Launcher APK (full patched source)
 on:
   workflow_dispatch:
   push:
@@ -10,6 +10,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -17,54 +18,76 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v4
-        with:
-          packages: ''
-      - name: Install Android build tools
+      - name: Install Android build tools and Apktool
+        shell: bash
         run: |
           set -euo pipefail
           sdkmanager --licenses >/dev/null || true
           sdkmanager "build-tools;35.0.0"
-      - name: Install Apktool 3.0.3
-        run: |
-          set -euo pipefail
           curl -fsSL https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -o apktool
-          curl -fsSL https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar -o apktool.jar
+          curl -fsSL https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar -o apktool.jar
           chmod +x apktool
           sudo mv apktool /usr/local/bin/apktool
           sudo mv apktool.jar /usr/local/bin/apktool.jar
-      - name: Prepare source
+          apktool --version
+      - name: Validate and extract complete patched source
+        shell: bash
         run: |
           set -euo pipefail
-          ORIGINAL=source/MotoLauncher3_Ultimate.apk
-          if [ ! -f "$ORIGINAL" ]; then
-            echo "::error::Upload the original APK as source/MotoLauncher3_Ultimate.apk. A fully decoded ZIP cannot preserve the original OEM resource table."
+          ARCHIVE=source/MotoLauncher3_Ultimate_Patched_All.zip
+          test -s "$ARCHIVE"
+          unzip -tq "$ARCHIVE"
+          mkdir -p work
+          unzip -q "$ARCHIVE" -d work/source
+          DECODED="$(find work/source -type f -name apktool.yml -print -quit | xargs -r dirname)"
+          if [ -z "$DECODED" ]; then
+            echo "::error::The patched source archive does not contain an Apktool project (apktool.yml)."
             exit 1
           fi
-          mkdir -p work
-          unzip -q source/MotoLauncher3_Ultimate_Patched_All.zip -d work/source-archive
-          PATCHED="$(find work/source-archive -type f -path '*/smali/com/android/launcher3/ModStack.smali' -print -quit)"
-          test -n "$PATCHED"
-          apktool d -f -r "$ORIGINAL" -o work/decoded
-          mkdir -p work/decoded/smali/com/android/launcher3
-          cp "$PATCHED" work/decoded/smali/com/android/launcher3/ModStack.smali
-          echo "DECODED=work/decoded" >> "$GITHUB_ENV"
-      - name: Build APK
+          test -d "$DECODED/smali" -o -d "$DECODED/smali_classes2"
+          echo "Decoded project: $DECODED"
+          echo "DECODED=$DECODED" >> "$GITHUB_ENV"
+          find "$DECODED" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
+          if ! find "$DECODED" -type f -name 'ModStack.smali' | grep -q .; then
+            echo "::error::No ModStack.smali was found in the patched source archive."
+            exit 1
+          fi
+      - name: Build full patched source without relinking OEM resources
+        shell: bash
         run: |
           set -euo pipefail
-          apktool b "$DECODED" -o MotoLauncher3-Ultimate-unsigned.apk
+          apktool b --no-res "$DECODED" -o MotoLauncher3-Ultimate-unsigned.apk
           test -s MotoLauncher3-Ultimate-unsigned.apk
-      - name: Sign APK
+          mkdir -p work/output
+          unzip -Z1 MotoLauncher3-Ultimate-unsigned.apk | grep -E '^classes([0-9]+)?\.dex$' | sort > work/output/dex-list.txt
+          test -s work/output/dex-list.txt
+          cat work/output/dex-list.txt
+          sha256sum MotoLauncher3-Ultimate-unsigned.apk | tee work/output/apk-sha256.txt
+          {
+            echo "Build mode: complete patched Apktool project (--no-res)"
+            echo "Smali source file count: $(cat work/smali-count.txt)"
+            echo "DEX files in output:"
+            cat work/output/dex-list.txt
+            echo "APK SHA-256:"
+            cat work/output/apk-sha256.txt
+          } > MotoLauncher3-build-report.txt
+      - name: Sign and verify APK
+        shell: bash
         run: |
           set -euo pipefail
           keytool -genkeypair -noprompt -keystore ci-test.jks -alias launcher-ci -keyalg RSA -keysize 2048 -validity 10000 -storepass ci-test-password -keypass ci-test-password -dname "CN=Moto Launcher CI Test"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks ci-test.jks --ks-key-alias launcher-ci --ks-pass pass:ci-test-password --key-pass pass:ci-test-password --out MotoLauncher3-Ultimate-CI-signed.apk MotoLauncher3-Ultimate-unsigned.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose MotoLauncher3-Ultimate-CI-signed.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging MotoLauncher3-Ultimate-CI-signed.apk | tee work/output/manifest-badging.txt
+          grep -q "package: name='com.motorola.launcher3'" work/output/manifest-badging.txt
+          cat work/output/manifest-badging.txt >> MotoLauncher3-build-report.txt
+          sha256sum MotoLauncher3-Ultimate-CI-signed.apk >> MotoLauncher3-build-report.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: MotoLauncher3-Ultimate-CI-build
+          name: MotoLauncher3-Ultimate-Patched-CI-build
           path: |
             MotoLauncher3-Ultimate-CI-signed.apk
             MotoLauncher3-Ultimate-unsigned.apk
+            MotoLauncher3-build-report.txt
           if-no-files-found: error
           retention-days: 14
-# Trigger a fresh build after the stock APK upload.
