@@ -50,6 +50,7 @@ jobs:
           test -f "$PATCHED_ROOT/smali/com/android/launcher3/ModStack.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/launcher3/ModStack.smali"
           apktool d -f -r "$ORIGINAL" -o work/decoded
           cp -a work/decoded/smali work/baseline-smali
+          python3 tools/apply_icon_lab_zoom_controls.py "$PATCHED_ROOT"
           bash tools/prepare_resource_build.sh "$PATCHED_ROOT"
           echo "PATCHED_ROOT=$PATCHED_ROOT" >> "$GITHUB_ENV"
           echo "DECODED=work/decoded" >> "$GITHUB_ENV"
