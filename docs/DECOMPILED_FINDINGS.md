@@ -24,3 +24,14 @@ This leaves the other selectable presets intact. Existing user-saved preference 
 ## Not yet complete
 
 This is a narrow first patch, not the full feature request. Adaptive-icon toggles, zoom/padding controls, expanded icon pack UX, settings categorization, app-opening animations, multi-select/folder workflows and broader Dock Studio controls are not yet implemented. The patched source tree has not been rebuilt or device-tested. Do not install it as a privileged system replacement until the build, signature requirements, and rollback route have been verified.
+
+
+## Follow-up analysis — icon pack and Recents integration
+
+The decoded project already contains `com.android.launcher3.widget.ModIconPackPreference`, a package-discovery ListPreference that queries the legacy ADW, Nova, and Apex icon-pack actions. `ModIconPack.get()` reads the selected `mod_icon_pack` package, parses its `appfilter` XML, and resolves component-to-drawable mappings. The initial Icon Lab patch had been inserting a second free-text preference with the same key; that was incorrect. The patch now preserves the existing picker and inserts only the zoom and safe-zone controls.
+
+The manifest originally queried only Motorola-specific actions. The build patch now adds explicit Android package-visibility queries for the icon-pack actions that the picker scans, which is important on modern Android versions.
+
+The Recents hook was originally called from `RecentsView.onScrollChanged` only. The patch now also calls it after `onLayout` recalculates page offsets, so the selected style or Stock transform reset is reconciled after layout as well as scrolling. The patch does not write card X/Y positions or scale values; native Quickstep remains responsible for card placement and scale animation.
+
+These are code-level fixes validated by the CI build and resource checks. They still require on-device confirmation that installed icon packs appear and apply, and that Recents cards no longer appear stuck/overlapped during open, swipe, dismiss, and return-home transitions.
