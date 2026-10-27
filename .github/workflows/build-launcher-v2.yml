@@ -10,6 +10,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -18,28 +19,42 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v4
       - name: Install build tools and apktool
+        shell: bash
         run: |
+          set -euo pipefail
           sdkmanager "build-tools;35.0.0"
           curl -fsSL https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -o apktool
           curl -fsSL https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar -o apktool.jar
           chmod +x apktool
           sudo mv apktool /usr/local/bin/apktool
           sudo mv apktool.jar /usr/local/bin/apktool.jar
+          apktool --version
       - name: Extract source
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           test -f source/MotoLauncher3_Ultimate_Patched_All.zip
+          unzip -tq source/MotoLauncher3_Ultimate_Patched_All.zip
           unzip -q source/MotoLauncher3_Ultimate_Patched_All.zip -d work
           DECODED="$(find work -type f -name apktool.yml -print -quit | xargs -r dirname)"
           test -n "$DECODED"
+          echo "Decoded project: $DECODED"
           echo "DECODED=$DECODED" >> "$GITHUB_ENV"
-      - name: Build and sign
+      - name: Build APK without relinking OEM resources
+        shell: bash
         run: |
-          set -e
-          apktool b "$DECODED" --no-res -o MotoLauncher3-Ultimate-unsigned.apk
+          set -euo pipefail
+          apktool b --no-res "$DECODED" -o MotoLauncher3-Ultimate-unsigned.apk
+          test -s MotoLauncher3-Ultimate-unsigned.apk
+          ls -lh MotoLauncher3-Ultimate-unsigned.apk
+      - name: Sign and verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
           keytool -genkeypair -noprompt -keystore ci-test.jks -alias launcher-ci -keyalg RSA -keysize 2048 -validity 10000 -storepass ci-test-password -keypass ci-test-password -dname "CN=Moto Launcher CI Test"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks ci-test.jks --ks-key-alias launcher-ci --ks-pass pass:ci-test-password --key-pass pass:ci-test-password --out MotoLauncher3-Ultimate-CI-signed.apk MotoLauncher3-Ultimate-unsigned.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose MotoLauncher3-Ultimate-CI-signed.apk
+          ls -lh MotoLauncher3-Ultimate-CI-signed.apk
       - uses: actions/upload-artifact@v4
         with:
           name: MotoLauncher3-Ultimate-CI-build-v2
