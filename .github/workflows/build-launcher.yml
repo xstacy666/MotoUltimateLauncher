@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apktool b "$PATCHED_ROOT" -o MotoLauncher3-Ultimate-unsigned.apk
+          apktool b --use-aapt1 "$PATCHED_ROOT" -o MotoLauncher3-Ultimate-unsigned.apk
           test -s MotoLauncher3-Ultimate-unsigned.apk
           mkdir -p work/output
           unzip -Z1 MotoLauncher3-Ultimate-unsigned.apk | grep -E '^classes([0-9]+)?\.dex$' | sort > work/output/dex-list.txt
