@@ -1,0 +1,80 @@
+name: Build Moto Launcher APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'source/MotoLauncher3_Ultimate_patched_sources.zip'
+      - '.github/workflows/build-launcher.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install apktool
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -o apktool
+          curl -fsSL https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.10.0.jar -o apktool.jar
+          chmod +x apktool
+          sudo mv apktool /usr/local/bin/apktool
+          sudo mv apktool.jar /usr/local/bin/apktool.jar
+          apktool --version
+
+      - name: Prepare decoded source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f source/MotoLauncher3_Ultimate_patched_sources.zip || {
+            echo "::error::Upload source/MotoLauncher3_Ultimate_patched_sources.zip to the repository first."
+            exit 1
+          }
+          mkdir -p work
+          unzip -q source/MotoLauncher3_Ultimate_patched_sources.zip -d work
+          DECODED="$(find work -type f -name apktool.yml -print -quit | xargs -r dirname)"
+          test -n "$DECODED" || { echo "::error::No apktool.yml found in source archive"; exit 1; }
+          echo "DECODED=$DECODED" >> "$GITHUB_ENV"
+
+      - name: Build APK without rebuilding OEM resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          apktool b "$DECODED" --no-res -o MotoLauncher3-Ultimate-unsigned.apk
+          test -s MotoLauncher3-Ultimate-unsigned.apk
+
+      - name: Create temporary CI signing key and sign APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -noprompt -keystore ci-test.jks -alias launcher-ci \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass ci-test-password -keypass ci-test-password \
+            -dname "CN=Moto Launcher CI Test"
+          curl -fsSL https://github.com/fornwall/apksigner/releases/download/0.9/apksigner-0.9.jar -o apksigner.jar
+          java -jar apksigner.jar sign --ks ci-test.jks --ks-key-alias launcher-ci \
+            --ks-pass pass:ci-test-password --key-pass pass:ci-test-password \
+            --out MotoLauncher3-Ultimate-CI-signed.apk MotoLauncher3-Ultimate-unsigned.apk
+          java -jar apksigner.jar verify --verbose MotoLauncher3-Ultimate-CI-signed.apk
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MotoLauncher3-Ultimate-CI-build
+          path: |
+            MotoLauncher3-Ultimate-CI-signed.apk
+            MotoLauncher3-Ultimate-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14
