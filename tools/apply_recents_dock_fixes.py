@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep stock Quickstep paging intact and implement a stronger iOS-style stacked-card transform."""
+"""Safe iOS-style stacked Recents + Dock fix. Conservative Smali that should assemble."""
 from pathlib import Path
 import re
 import sys
@@ -12,102 +12,115 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# Recents: stock mode clears transforms; iOS 26 stacked applies scale + vertical offset +
-# depth + mild alpha so cards feel like a stacked pile while keeping horizontal paging.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
+
+# Conservative apply method — fewer registers, simple control flow
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
-    .locals 20
+    .locals 12
+
     :try_start_0
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
     move-result-object v0
+
     const-string v1, "mod_recents_style"
     const/4 v2, 0x0
     invoke-static {v0, v1, v2}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
-    move-result v8
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getWidth()I
     move-result v0
-    if-lez v0, :done
-    int-to-float v1, v0
+
+    invoke-virtual {p0}, Landroid/view/ViewGroup;->getWidth()I
+    move-result v1
+    if-gtz v1, :done
+
+    int-to-float v1, v1
     const/high16 v2, 0x40000000    # 2.0f
-    div-float/2addr v1, v2
+    div-float v1, v1, v2
+
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getScrollX()I
-    move-result v3
-    int-to-float v3, v3
+    move-result v2
+    int-to-float v2, v2
+
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getChildCount()I
-    move-result v4
-    const/4 v5, 0x0
+    move-result v3
+
+    const/4 v4, 0x0
+
     :loop
-    if-ge v5, v4, :done
-    invoke-virtual {p0, v5}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
-    move-result-object v6
-    instance-of v7, v6, Lcom/android/quickstep/views/TaskView;
-    if-eqz v7, :next
-    if-nez v8, :stacked
-    # Stock mode: force clean transforms
-    const/4 v9, 0x0
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationX(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationY(F)V
-    const/high16 v9, 0x3f800000    # 1.0f
-    invoke-virtual {v6, v9}, Landroid/view/View;->setScaleX(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setScaleY(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setAlpha(F)V
+    if-ge v4, v3, :done
+
+    invoke-virtual {p0, v4}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
+    move-result-object v5
+
+    instance-of v6, v5, Lcom/android/quickstep/views/TaskView;
+    if-eqz v6, :next
+
+    if-nez v0, :do_stacked
+
+    const/4 v6, 0x0
+    invoke-virtual {v5, v6}, Landroid/view/View;->setRotationY(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setRotationX(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setRotation(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setTranslationZ(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setTranslationY(F)V
+    const/high16 v6, 0x3f800000    # 1.0f
+    invoke-virtual {v5, v6}, Landroid/view/View;->setScaleX(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setScaleY(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setAlpha(F)V
     goto :next
-    :stacked
-    # Distance of card center from viewport center (normalized 0..1+)
-    invoke-virtual {v6}, Landroid/view/View;->getX()F
+
+    :do_stacked
+    invoke-virtual {v5}, Landroid/view/View;->getX()F
+    move-result v6
+    invoke-virtual {v5}, Landroid/view/View;->getWidth()I
     move-result v7
-    invoke-virtual {v6}, Landroid/view/View;->getWidth()I
-    move-result v9
-    div-int/lit8 v9, v9, 0x2
-    int-to-float v9, v9
-    add-float/2addr v7, v9
-    sub-float/2addr v7, v3
-    sub-float/2addr v7, v1
-    invoke-static {v7}, Ljava/lang/Math;->abs(F)F
-    move-result v9
-    div-float/2addr v9, v1
-    const/high16 v10, 0x3f800000    # 1.0f
-    invoke-static {v9, v10}, Ljava/lang/Math;->min(FF)F
-    move-result v9
-    # Scale: 1.0 at center -> \~0.72 at edge (stronger stacked feel)
-    const v10, 0x3e8f5c29    # 0.28f
-    mul-float/2addr v10, v9
-    const/high16 v11, 0x3f800000    # 1.0f
-    sub-float/2addr v11, v10
-    invoke-virtual {v6, v11}, Landroid/view/View;->setScaleX(F)V
-    invoke-virtual {v6, v11}, Landroid/view/View;->setScaleY(F)V
-    # Vertical offset: push off-center cards slightly down (stack illusion)
-    const/high16 v10, 0x42400000    # 48.0f
-    mul-float/2addr v10, v9
-    invoke-virtual {v6, v10}, Landroid/view/View;->setTranslationY(F)V
-    # Depth: higher Z for nearer cards
-    const/high16 v10, 0x3f800000    # 1.0f
-    sub-float/2addr v10, v9
-    const/high16 v12, 0x42480000    # 50.0f
-    mul-float/2addr v10, v12
-    invoke-virtual {v6, v10}, Landroid/view/View;->setTranslationZ(F)V
-    # Mild alpha fade for distant cards
-    const/high16 v10, 0x3f800000    # 1.0f
-    const v12, 0x3e4ccccd    # 0.2f
-    mul-float/2addr v12, v9
-    sub-float/2addr v10, v12
-    invoke-virtual {v6, v10}, Landroid/view/View;->setAlpha(F)V
-    # Never apply rotation (avoids extreme 3D distortion)
-    const/4 v10, 0x0
-    invoke-virtual {v6, v10}, Landroid/view/View;->setRotationY(F)V
-    invoke-virtual {v6, v10}, Landroid/view/View;->setRotationX(F)V
-    invoke-virtual {v6, v10}, Landroid/view/View;->setRotation(F)V
+    div-int/lit8 v7, v7, 0x2
+    int-to-float v7, v7
+    add-float/2addr v6, v7
+    sub-float/2addr v6, v2
+    sub-float/2addr v6, v1
+    invoke-static {v6}, Ljava/lang/Math;->abs(F)F
+    move-result v6
+    div-float/2addr v6, v1
+    const/high16 v7, 0x3f800000    # 1.0f
+    invoke-static {v6, v7}, Ljava/lang/Math;->min(FF)F
+    move-result v6
+
+    const v7, 0x3e4ccccd    # 0.2f
+    mul-float v7, v7, v6
+    const/high16 v8, 0x3f800000    # 1.0f
+    sub-float v7, v8, v7
+    invoke-virtual {v5, v7}, Landroid/view/View;->setScaleX(F)V
+    invoke-virtual {v5, v7}, Landroid/view/View;->setScaleY(F)V
+
+    const/high16 v7, 0x42000000    # 32.0f
+    mul-float v7, v7, v6
+    invoke-virtual {v5, v7}, Landroid/view/View;->setTranslationY(F)V
+
+    sub-float v7, v8, v6
+    const/high16 v9, 0x42200000    # 40.0f
+    mul-float v7, v7, v9
+    invoke-virtual {v5, v7}, Landroid/view/View;->setTranslationZ(F)V
+
+    const v7, 0x3e4ccccd    # 0.2f
+    mul-float v7, v7, v6
+    sub-float v7, v8, v7
+    invoke-virtual {v5, v7}, Landroid/view/View;->setAlpha(F)V
+
+    const/4 v6, 0x0
+    invoke-virtual {v5, v6}, Landroid/view/View;->setRotationY(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setRotationX(F)V
+    invoke-virtual {v5, v6}, Landroid/view/View;->setRotation(F)V
+
     :next
-    add-int/lit8 v5, v5, 0x1
+    add-int/lit8 v4, v4, 0x1
     goto :loop
+
     :done
     return-void
+
     :try_end_0
     .catch Ljava/lang/Throwable; {:try_start_0 .. :try_end_0} :catch_0
+
     :catch_0
     move-exception v0
     return-void
@@ -115,7 +128,9 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
 
 stack, count = re.subn(
     r"(?s)\.method public static apply\(Landroid/view/ViewGroup;\)V.*?\.end method",
-    apply_method, stack, count=1
+    apply_method,
+    stack,
+    count=1,
 )
 if count != 1:
     raise SystemExit("Could not replace ModStack.apply")
@@ -133,20 +148,25 @@ params_method = r""".method public static params(I)[F
         0x0
         0x0
         0x0
-        0x42480000
+        0x42200000
     .end array-data
 .end method"""
+
 stack, count = re.subn(
     r"(?s)\.method public static params\(I\)\[F.*?\.end method",
-    params_method, stack, count=1
+    params_method,
+    stack,
+    count=1,
 )
 if count != 1:
     raise SystemExit("Could not replace ModStack.params")
+
 stack_path.write_text(stack)
 
-# Keep exactly two user-facing Recents choices: Stock and iOS 26 stacked.
+# Preference labels
 arrays_path = root / "res/values/arrays.xml"
 arrays_text = arrays_path.read_text()
+
 def replace_string_array(source, name, items):
     pattern = re.compile(r'(?s)(<string-array name="' + re.escape(name) + r'">).*?(</string-array>)')
     body = "\n".join("        <item>" + item + "</item>" for item in items)
@@ -154,12 +174,12 @@ def replace_string_array(source, name, items):
     if n != 1:
         raise SystemExit("Could not find " + name + " in arrays.xml")
     return updated
+
 arrays_text = replace_string_array(arrays_text, "mod_recents_entries", ["Stock", "iOS 26 stacked"])
 arrays_text = replace_string_array(arrays_text, "mod_recents_values", ["0", "1"])
 arrays_path.write_text(arrays_text)
 
-# Dock: don't skip drawing the glass/background merely because Hotseat's alpha
-# briefly drops during swipe transitions.
+# Dock alpha fix
 dock_path = find_smali("com/android/launcher3/DockBlur.smali")
 dock = dock_path.read_text()
 alpha_gate = re.compile(
@@ -171,10 +191,11 @@ alpha_gate = re.compile(
 )
 dock, count = alpha_gate.subn(
     "    invoke-virtual {p0}, Landroid/view/View;->getAlpha()F\n\n    move-result v1\n",
-    dock, count=1
+    dock,
+    count=1,
 )
 if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Applied improved iOS 26 stacked Recents (scale + Y offset + depth + alpha) and Dock Studio swipe-fade fix.")
+print("Applied safe iOS 26 stacked Recents + Dock fix.")
