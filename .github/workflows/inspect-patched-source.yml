@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/inspect-patched-source.yml'
+      - 'source/INSPECTION_TRIGGER.txt'
 permissions:
   contents: read
 jobs:
