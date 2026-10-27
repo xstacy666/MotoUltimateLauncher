@@ -81,13 +81,15 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
     if-eqz v8, :stock_style
 
-    # Upright iOS-style stepped stack: off-centre cards shrink by up to 10%
-    # and step down by up to 48 px. Do not touch native X positions or scroll.
+    # Upright iOS-style stepped stack: the active card is 92% size, while
+    # off-centre cards shrink to 84% and step down by up to 48 px. This makes
+    # the selected style visibly different even when only the active card peeks.
+    # Do not touch native X positions or horizontal scroll.
     invoke-static {v7}, Ljava/lang/Math;->abs(F)F
     move-result v11
-    const v9, 0x3dcccccd    # 0.1f
+    const v9, 0x3da3d70a    # 0.08f
     mul-float/2addr v9, v11
-    const/high16 v10, 0x3f800000    # 1.0f
+    const v10, 0x3f6b851f    # 0.92f
     sub-float/2addr v10, v9
     invoke-virtual {v6, v10}, Landroid/view/View;->setScaleX(F)V
     invoke-virtual {v6, v10}, Landroid/view/View;->setScaleY(F)V
@@ -250,4 +252,4 @@ recents_check = recents_path.read_text()
 if recents_check.count("ModStack;->apply(Landroid/view/ViewGroup;)V") < 2:
     raise SystemExit("Expected ModStack hooks in both RecentsView.onLayout and onScrollChanged")
 
-print("Stock mode preserves native paging; iOS style uses upright cards with up to 10% scale reduction and 48 px vertical stepping. Reconcile after layout and scrolling.")
+print("Stock mode preserves native paging; iOS style uses upright cards scaled 92% at center down to 84% off-centre, with up to 48 px vertical stepping. Reconcile after layout and scrolling.")
