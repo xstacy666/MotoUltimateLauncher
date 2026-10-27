@@ -7,9 +7,10 @@ root = Path(sys.argv[1])
 
 # OEM settings contain preferences without a key. initPreference() hashes the
 # key before checking it, causing an immediate NPE on Android 16 / this build.
-settings = root / "smali/com/android/launcher3/settings/SettingsActivity$LauncherSettingsFragment.smali"
-if not settings.exists():
-    raise SystemExit(f"Settings fragment Smali not found: {settings}")
+settings_candidates = list(root.glob("smali*/com/android/launcher3/settings/SettingsActivity$LauncherSettingsFragment.smali"))
+if len(settings_candidates) != 1:
+    raise SystemExit(f"Expected exactly one settings fragment Smali file, found: {settings_candidates}")
+settings = settings_candidates[0]
 settings_text = settings.read_text()
 signature = re.search(
     r"(?m)^\\.method[^\\n]*\\binitPreference\\(Landroidx/preference/Preference;\\)([VZ])[^\\n]*$",
