@@ -308,11 +308,18 @@ smali.write_text(text)
 prefs = root / "res/xml/launcher_preferences.xml"
 text = prefs.read_text()
 anchor = '<com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_shape_entries" android:title="Icon shape" android:key="mod_icon_shape" android:summary="%s" android:defaultValue="0" android:entryValues="@array/mod_icon_shape_values" />'
-addition = anchor + '\n        <androidx.preference.EditTextPreference android:persistent="true" android:title="Icon pack" android:key="mod_icon_pack" android:summary="Enter the installed icon pack package name; leave blank for system icons." android:defaultValue="" />\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_zoom_entries" android:title="Icon foreground zoom" android:key="mod_icon_zoom" android:summary="%s" android:defaultValue="100" android:entryValues="@array/mod_icon_zoom_values" />\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_inset_entries" android:title="Icon safe-zone padding" android:key="mod_icon_inset" android:summary="%s" android:defaultValue="0" android:entryValues="@array/mod_icon_inset_values" />'
-if "mod_icon_pack" not in text or "mod_icon_zoom" not in text:
+zoom_addition = anchor + '\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_zoom_entries" android:title="Icon foreground zoom" android:key="mod_icon_zoom" android:summary="%s" android:defaultValue="100" android:entryValues="@array/mod_icon_zoom_values" />\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_inset_entries" android:title="Icon safe-zone padding" android:key="mod_icon_inset" android:summary="%s" android:defaultValue="0" android:entryValues="@array/mod_icon_inset_values" />'
+if "android:key=\"mod_icon_pack\"" not in text:
+    if not any(root.glob("smali*/com/android/launcher3/widget/ModIconPackPreference.smali")):
+        raise SystemExit("Icon-pack preference class is missing; refusing to create a non-functional text field")
+    pack_pref = '<com.android.launcher3.widget.ModIconPackPreference android:persistent="true" android:title="Icon pack" android:key="mod_icon_pack" android:summary="%s" android:defaultValue="none" />'
     if anchor not in text:
         raise SystemExit("Could not find Icon shape preference insertion point")
-    text = text.replace(anchor, addition, 1)
+    text = text.replace(anchor, pack_pref + '\n        ' + anchor, 1)
+if "mod_icon_zoom" not in text or "mod_icon_inset" not in text:
+    if anchor not in text:
+        raise SystemExit("Could not find Icon shape preference insertion point")
+    text = text.replace(anchor, zoom_addition, 1)
 prefs.write_text(text)
 
 arrays = root / "res/values/arrays.xml"
@@ -342,15 +349,7 @@ text = prefs_smali.read_text()
 anchor = """    const-string v0, "mod_row_extra"
 
     invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z"""
-addition = """    const-string v0, "mod_icon_pack"
-
-    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
-
-    move-result v0
-
-    if-nez v0, :cond_0
-
-    const-string v0, "mod_icon_zoom"
+addition = """    const-string v0, "mod_icon_zoom"
 
     invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
 
@@ -368,9 +367,32 @@ addition = """    const-string v0, "mod_icon_pack"
 
 """ + anchor
 if "const-string v0, \"mod_icon_zoom\"" not in text:
+    if "const-string v0, \"mod_icon_pack\"" not in text:
+        raise SystemExit("Existing ModPrefs handler does not handle mod_icon_pack")
     if anchor not in text:
         raise SystemExit("Could not find ModPrefs.onChanged insertion point")
     text = text.replace(anchor, addition, 1)
 prefs_smali.write_text(text)
 
-print("Applied Icon Lab icon-pack package selector, foreground zoom, and safe-zone padding controls.")
+# Android 11+ package visibility: allow the icon-pack discovery intents already
+# queried by ModIconPackPreference. Keep the OEM manifest otherwise untouched.
+manifest = root / "AndroidManifest.xml"
+manifest_text = manifest.read_text()
+queries_open = manifest_text.find("<queries>")
+queries_close = manifest_text.find("</queries>", queries_open)
+if queries_open < 0 or queries_close < 0:
+    raise SystemExit("Could not find AndroidManifest <queries> block")
+query_actions = [
+    "org.adw.launcher.THEMES",
+    "com.novalauncher.THEME",
+    "com.anddoes.launcher.THEME",
+    "org.adw.launcher.icons.ACTION_PICK_ICON",
+]
+query_block = manifest_text[queries_open:queries_close]
+for action in query_actions:
+    if action not in query_block:
+        query_block += '\n        <intent><action android:name="' + action + '" /></intent>'
+manifest_text = manifest_text[:queries_open] + query_block + manifest_text[queries_close:]
+manifest.write_text(manifest_text)
+
+print("Preserved the real icon-pack picker, added zoom/padding controls and Android package-visibility queries.")

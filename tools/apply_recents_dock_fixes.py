@@ -19,8 +19,8 @@ stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     .locals 12
 
-    # Clear stale custom 3D transforms while leaving Quickstep positional
-    # layout and scale animations intact. iOS mode adds a restrained Y tilt.
+    # Clear stale custom 3D transforms while leaving Quickstep horizontal
+    # paging intact. iOS mode uses upright, scaled, vertically stepped cards.
     :try_start_0
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
     move-result-object v0
@@ -75,13 +75,33 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
 
-    const v9, 0x45fa0000
+    const v9, 0x45fa0000    # 8000.0f camera distance
     invoke-virtual {v6, v9}, Landroid/view/View;->setCameraDistance(F)V
     const/4 v9, 0x0
-    aget v11, v10, v9
-    mul-float/2addr v11, v7
-    neg-float v11, v11
-    invoke-virtual {v6, v11}, Landroid/view/View;->setRotationY(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
+    if-eqz v8, :stock_style
+
+    # Upright iOS-style stepped stack: the active card is 92% size, while
+    # off-centre cards shrink to 84% and step down by up to 48 px. This makes
+    # the selected style visibly different even when only the active card peeks.
+    # Do not touch native X positions or horizontal scroll.
+    invoke-static {v7}, Ljava/lang/Math;->abs(F)F
+    move-result v11
+    const v9, 0x3da3d70a    # 0.08f
+    mul-float/2addr v9, v11
+    const v10, 0x3f6b851f    # 0.92f
+    sub-float/2addr v10, v9
+    invoke-virtual {v6, v10}, Landroid/view/View;->setScaleX(F)V
+    invoke-virtual {v6, v10}, Landroid/view/View;->setScaleY(F)V
+    const/high16 v9, 0x42400000    # 48.0f
+    mul-float/2addr v11, v9
+    invoke-virtual {v6, v11}, Landroid/view/View;->setTranslationY(F)V
+    goto :next
+
+    :stock_style
+    # Clear our vertical offset but leave Quickstep's native scale animation alone.
+    const/4 v9, 0x0
+    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationY(F)V
 
     :next
     add-int/lit8 v5, v5, 0x1
@@ -155,4 +175,81 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Kept Stock Recents transforms native; iOS Stacked uses a restrained 8-degree Y tilt only during paging; applied Icon Lab controls and Dock Studio swipe-fade drawing.")
+# Re-apply/reset the custom transform after native page offsets are recalculated.
+# The existing hook only runs on scroll; a fresh layout or task-list update can
+# otherwise leave a stale rotation behind until the next swipe.
+recents_path = find_smali("com/android/quickstep/views/RecentsView.smali")
+recents = recents_path.read_text()
+layout_start = re.search(r"(?m)^\.method protected onLayout\(ZIIII\)V$", recents)
+if not layout_start:
+    raise SystemExit("Could not find RecentsView.onLayout")
+layout_end = recents.find(".end method", layout_start.end())
+if layout_end < 0:
+    raise SystemExit("Could not find end of RecentsView.onLayout")
+layout_method = recents[layout_start.start():layout_end]
+hook = "    invoke-static {p0}, Lcom/android/launcher3/ModStack;->apply(Landroid/view/ViewGroup;)V"
+if hook not in layout_method:
+    anchor = "    invoke-direct {p0}, Lcom/android/quickstep/views/RecentsView;->updatePageOffsets()V"
+    if anchor not in layout_method:
+        raise SystemExit("Could not find updatePageOffsets in RecentsView.onLayout")
+    layout_method = layout_method.replace(anchor, anchor + "\n\n    # Reconcile custom Recents transforms after native layout/offset calculation.\n" + hook, 1)
+    recents = recents[:layout_start.start()] + layout_method + recents[layout_end:]
+    recents_path.write_text(recents)
+
+# Recents style is a runtime view transform, so restart the launcher after the
+# preference changes. This also guarantees Stock mode cannot retain the iOS scale.
+prefs_path = find_smali("com/android/launcher3/ModPrefs.smali")
+prefs = prefs_path.read_text()
+if ":check_recents_style" not in prefs:
+    row_gate = '''    const-string v0, "mod_row_extra"
+
+    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :cond_1
+
+    :cond_0'''
+    row_replacement = '''    const-string v0, "mod_row_extra"
+
+    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :check_recents_style
+
+    :cond_0'''
+    if row_gate not in prefs:
+        raise SystemExit("Could not locate ModPrefs row-extra preference gate")
+    prefs = prefs.replace(row_gate, row_replacement, 1)
+    tail = '''    :cond_1
+    return-void
+
+    :catch_0'''
+    restart_branch = '''    :check_recents_style
+    const-string v0, "mod_recents_style"
+    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v0
+    if-eqz v0, :cond_1
+    invoke-interface {p1}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+    move-result-object v0
+    invoke-interface {v0}, Landroid/content/SharedPreferences$Editor;->commit()Z
+    invoke-static {}, Landroid/os/Process;->myPid()I
+    move-result v0
+    invoke-static {v0}, Landroid/os/Process;->killProcess(I)V
+
+    :cond_1
+    return-void
+
+    :catch_0'''
+    if tail not in prefs:
+        raise SystemExit("Could not locate ModPrefs.onChanged return block")
+    prefs = prefs.replace(tail, restart_branch, 1)
+    prefs_path.write_text(prefs)
+
+# Guard the expected integration points so future source changes fail loudly.
+recents_check = recents_path.read_text()
+if recents_check.count("ModStack;->apply(Landroid/view/ViewGroup;)V") < 2:
+    raise SystemExit("Expected ModStack hooks in both RecentsView.onLayout and onScrollChanged")
+
+print("Stock mode preserves native paging; iOS style uses upright cards scaled 92% at center down to 84% off-centre, with up to 48 px vertical stepping. Reconcile after layout and scrolling.")
