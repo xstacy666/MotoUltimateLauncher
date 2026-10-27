@@ -19,8 +19,8 @@ stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     .locals 12
 
-    # Clear stale custom 3D transforms while leaving Quickstep positional
-    # layout and scale animations intact. iOS mode adds a restrained Y tilt.
+    # Clear stale custom 3D transforms while leaving Quickstep horizontal
+    # paging intact. iOS mode uses upright, scaled, vertically stepped cards.
     :try_start_0
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
     move-result-object v0
@@ -75,13 +75,24 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
 
-    const v9, 0x45fa0000
+    const v9, 0x45fa0000    # 8000.0f camera distance
     invoke-virtual {v6, v9}, Landroid/view/View;->setCameraDistance(F)V
     const/4 v9, 0x0
-    aget v11, v10, v9
-    mul-float/2addr v11, v7
-    neg-float v11, v11
-    invoke-virtual {v6, v11}, Landroid/view/View;->setRotationY(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
+
+    # Upright iOS-style stepped stack: off-centre cards shrink by up to 10%
+    # and step down by up to 48 px. Do not touch native X positions or scroll.
+    invoke-static {v7}, Ljava/lang/Math;->abs(F)F
+    move-result v11
+    const v9, 0x3dcccccd    # 0.1f
+    mul-float/2addr v9, v11
+    const/high16 v10, 0x3f800000    # 1.0f
+    sub-float/2addr v10, v9
+    invoke-virtual {v6, v10}, Landroid/view/View;->setScaleX(F)V
+    invoke-virtual {v6, v10}, Landroid/view/View;->setScaleY(F)V
+    const/high16 v9, 0x42400000    # 48.0f
+    mul-float/2addr v11, v9
+    invoke-virtual {v6, v11}, Landroid/view/View;->setTranslationY(F)V
 
     :next
     add-int/lit8 v5, v5, 0x1
