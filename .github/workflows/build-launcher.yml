@@ -23,23 +23,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate Android SDK and install build tools
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - name: Install Android build tools
         shell: bash
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-          if [ -z "$SDK_ROOT" ]; then
-            echo "::error::Android SDK was not preinstalled on this runner."
-            exit 1
-          fi
-          echo "Android SDK: $SDK_ROOT"
-          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)"
-          if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager was not found under $SDK_ROOT/cmdline-tools."
-            exit 1
-          fi
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "build-tools;35.0.0"
+          test -n "$SDK_ROOT"
+          sdkmanager "build-tools;35.0.0"
           test -x "$SDK_ROOT/build-tools/35.0.0/apksigner"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
