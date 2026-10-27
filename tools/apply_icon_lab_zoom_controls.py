@@ -13,7 +13,7 @@ if len(settings_candidates) != 1:
 settings = settings_candidates[0]
 settings_text = settings.read_text()
 signature = re.search(
-    r"(?m)^\\.method[^\\n]*\\binitPreference\\(Landroidx/preference/Preference;\\)([VZ])[^\\n]*$",
+    r"(?m)^\.method[^\n]*\binitPreference\(Landroidx/preference/Preference;\)([VZ])[^\n]*$",
     settings_text,
 )
 if not signature:
@@ -27,25 +27,26 @@ if ":mod_null_preference_key" not in method:
     # Guard whichever register receives getKey(); don't assume register v0 or
     # a particular method visibility/return type.
     pattern = re.compile(
-        r"(?m)^(?P<indent>[ \\t]*)move-result-object (?P<reg>[vp]\\d+)\\n"
-        r"(?P<indent2>[ \\t]*)invoke-virtual \\{(?P=reg)\\}, Ljava/lang/Object;->hashCode\\(\\)I"
+        r"(?m)^(?P<indent>[ \t]*)move-result-object (?P<reg>[vp]\d+)\n"
+        r"(?P<indent2>[ \t]*)invoke-virtual \{(?P=reg)\}, Ljava/lang/Object;->hashCode\(\)I"
     )
     match = pattern.search(method)
     if not match:
         raise SystemExit("Could not find getKey() result immediately hashed in initPreference")
     reg = match.group("reg")
     indent = match.group("indent2")
+    lines = match.group(0).splitlines()
     guarded = (
-        match.group(0).splitlines()[0]
-        + "\\n" + indent + f"if-eqz {reg}, :mod_null_preference_key\\n"
-        + match.group(0).splitlines()[1]
+        lines[0]
+        + "\n" + indent + f"if-eqz {reg}, :mod_null_preference_key"
+        + "\n" + lines[1]
     )
     method = method[:match.start()] + guarded + method[match.end():]
     return_type = signature.group(1)
     if return_type == "V":
-        epilogue = "\\n    :mod_null_preference_key\\n    return-void\\n"
+        epilogue = "\n    :mod_null_preference_key\n    return-void\n"
     else:
-        epilogue = "\\n    :mod_null_preference_key\\n    const/4 v0, 0x1\\n    return v0\\n"
+        epilogue = "\n    :mod_null_preference_key\n    const/4 v0, 0x1\n    return v0\n"
     method += epilogue
     settings_text = settings_text[:method_start] + method + settings_text[method_end:]
     settings.write_text(settings_text)
