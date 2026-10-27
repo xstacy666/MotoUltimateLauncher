@@ -194,6 +194,57 @@ if hook not in layout_method:
     recents = recents[:layout_start.start()] + layout_method + recents[layout_end:]
     recents_path.write_text(recents)
 
+# Recents style is a runtime view transform, so restart the launcher after the
+# preference changes. This also guarantees Stock mode cannot retain the iOS scale.
+prefs_path = find_smali("com/android/launcher3/ModPrefs.smali")
+prefs = prefs_path.read_text()
+if ":check_recents_style" not in prefs:
+    row_gate = '''    const-string v0, "mod_row_extra"
+
+    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :cond_1
+
+    :cond_0'''
+    row_replacement = '''    const-string v0, "mod_row_extra"
+
+    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :check_recents_style
+
+    :cond_0'''
+    if row_gate not in prefs:
+        raise SystemExit("Could not locate ModPrefs row-extra preference gate")
+    prefs = prefs.replace(row_gate, row_replacement, 1)
+    tail = '''    :cond_1
+    return-void
+
+    :catch_0'''
+    restart_branch = '''    :check_recents_style
+    const-string v0, "mod_recents_style"
+    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result v0
+    if-eqz v0, :cond_1
+    invoke-interface {p1}, Landroid/content/SharedPreferences;->edit()Landroid/content/SharedPreferences$Editor;
+    move-result-object v0
+    invoke-interface {v0}, Landroid/content/SharedPreferences$Editor;->commit()Z
+    invoke-static {}, Landroid/os/Process;->myPid()I
+    move-result v0
+    invoke-static {v0}, Landroid/os/Process;->killProcess(I)V
+
+    :cond_1
+    return-void
+
+    :catch_0'''
+    if tail not in prefs:
+        raise SystemExit("Could not locate ModPrefs.onChanged return block")
+    prefs = prefs.replace(tail, restart_branch, 1)
+    prefs_path.write_text(prefs)
+
 # Guard the expected integration points so future source changes fail loudly.
 recents_check = recents_path.read_text()
 if recents_check.count("ModStack;->apply(Landroid/view/ViewGroup;)V") < 2:
