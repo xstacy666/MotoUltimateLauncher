@@ -58,14 +58,25 @@ jobs:
           find "$PATCHED_ROOT" -maxdepth 1 -type d -name 'smali*' -print | sort > work/smali-roots.txt
           test -s work/smali-roots.txt
           cat work/smali-roots.txt
-      - name: Overlay all patched Smali source trees
+      - name: Overlay patched Smali while preserving stock Quickstep / Recents source
         shell: bash
         run: |
           set -euo pipefail
           while IFS= read -r SRC; do
             NAME="$(basename "$SRC")"
-            mkdir -p "$DECODED/$NAME"
-            cp -a "$SRC/." "$DECODED/$NAME/"
+            while IFS= read -r FILE; do
+              REL="${FILE#"$SRC"/}"
+              # The bundled patched tree comes from a different decompile/base.
+              # Never overlay its Recents/Quickstep implementation onto the stock APK.
+              case "$REL" in
+                com/android/quickstep/*|com/android/launcher3/uioverrides/QuickstepLauncher.smali|com/android/systemui/shared/system/QuickStepContract.smali|com/android/systemui/animation/ActivityTransitionAnimator\$AnimationDelegate.smali)
+                  echo "Preserving stock $NAME/$REL"
+                  continue
+                  ;;
+              esac
+              mkdir -p "$DECODED/$NAME/$(dirname "$REL")"
+              cp "$FILE" "$DECODED/$NAME/$REL"
+            done < <(find "$SRC" -type f -name '*.smali' -print)
           done < work/smali-roots.txt
           if diff -qr work/baseline-smali "$DECODED/smali" > work/smali-diff.txt; then
             echo "::error::No changes detected in the primary Smali tree after applying the patched source."
@@ -73,6 +84,7 @@ jobs:
           fi
           echo "Primary Smali changes:"
           sed -n '1,80p' work/smali-diff.txt
+          echo "Stock Quickstep/Recents classes preserved from original APK."
           find "$DECODED" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
       - name: Build complete patched source and settings resources
         shell: bash
