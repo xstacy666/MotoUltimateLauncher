@@ -41,5 +41,7 @@ jobs:
             source-file-list.txt
             smali-count.txt
             relevant-files.txt
+            original-resource-table.txt
+            custom-resource-check.txt
           if-no-files-found: error
           retention-days: 7
