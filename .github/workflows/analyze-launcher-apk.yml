@@ -33,7 +33,7 @@ jobs:
           sudo ln -sf /opt/jadx/bin/jadx /usr/local/bin/jadx
           apktool --version
           jadx --version
-      - name: Decode source project and build analysis APK
+      - name: Extract decoded source project
         shell: bash
         run: |
           set -euo pipefail
@@ -43,22 +43,18 @@ jobs:
           unzip -q source/MotoLauncher3_Ultimate_Patched_All.zip -d work
           DECODED="$(find work -type f -name apktool.yml -print -quit | xargs -r dirname)"
           test -n "$DECODED"
-          apktool b --no-res "$DECODED" -o MotoLauncher3-Ultimate-analysis.apk
-          test -s MotoLauncher3-Ultimate-analysis.apk
-      - name: Run static reverse-engineering analysis
+          echo "DECODED=$DECODED" >> "$GITHUB_ENV"
+      - name: Analyze decoded project without OEM resource relinking
         shell: bash
         run: |
           set -euo pipefail
-          bash tools/analyze_launcher_apk.sh MotoLauncher3-Ultimate-analysis.apk ./analysis/launcher
+          bash tools/analyze_launcher_apk.sh "$DECODED" ./analysis/launcher
           cat ./analysis/launcher/REPORT.md
       - uses: actions/upload-artifact@v4
         with:
           name: MotoUltimateLauncher-ReverseEngineering-Report
           path: |
             analysis/launcher/REPORT.md
-            analysis/launcher/zip-integrity.txt
-            analysis/launcher/jadx.log
-            analysis/launcher/java/
-            analysis/launcher/resources/
+            analysis/launcher/project/
           if-no-files-found: error
           retention-days: 14
