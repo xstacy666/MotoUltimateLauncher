@@ -17,9 +17,81 @@ def find_smali(rel):
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
-    .locals 0
-    # Quickstep owns TaskView transforms and animations. Never write transforms
-    # from this callback: it is invoked during paging/transition frames.
+    .locals 12
+
+    # Clear stale custom 3D transforms while leaving Quickstep positional
+    # layout and scale animations intact. iOS mode adds a restrained Y tilt.
+    :try_start_0
+    invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
+    move-result-object v0
+    const-string v1, "mod_recents_style"
+    const/4 v2, 0x0
+    invoke-static {v0, v1, v2}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
+    move-result v8
+
+    invoke-virtual {p0}, Landroid/view/ViewGroup;->getWidth()I
+    move-result v0
+    if-lez v0, :done
+    int-to-float v1, v0
+    const/high16 v2, 0x40000000
+    div-float/2addr v1, v2
+    invoke-virtual {p0}, Landroid/view/ViewGroup;->getScrollX()I
+    move-result v3
+    int-to-float v3, v3
+    invoke-virtual {p0}, Landroid/view/ViewGroup;->getChildCount()I
+    move-result v4
+    invoke-static {v8}, Lcom/android/launcher3/ModStack;->params(I)[F
+    move-result-object v10
+    const/4 v5, 0x0
+
+    :loop
+    if-ge v5, v4, :done
+    invoke-virtual {p0, v5}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
+    move-result-object v6
+    instance-of v7, v6, Lcom/android/quickstep/views/TaskView;
+    if-eqz v7, :next
+
+    invoke-virtual {v6}, Landroid/view/View;->getX()F
+    move-result v7
+    invoke-virtual {v6}, Landroid/view/View;->getWidth()I
+    move-result v9
+    div-int/lit8 v9, v9, 0x2
+    int-to-float v9, v9
+    add-float/2addr v7, v9
+    sub-float/2addr v7, v3
+    sub-float/2addr v7, v1
+    int-to-float v9, v0
+    div-float/2addr v7, v9
+    const/high16 v9, -0x40800000    # -1.0f
+    invoke-static {v7, v9}, Ljava/lang/Math;->max(FF)F
+    move-result v7
+    const/high16 v9, 0x3f800000    # 1.0f
+    invoke-static {v7, v9}, Ljava/lang/Math;->min(FF)F
+    move-result v7
+
+    # Clear stale custom 3D transforms without touching positional layout/scale.
+    const/4 v9, 0x0
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationX(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
+
+    const v9, 0x45fa0000
+    invoke-virtual {v6, v9}, Landroid/view/View;->setCameraDistance(F)V
+    const/4 v9, 0x0
+    aget v11, v10, v9
+    mul-float/2addr v11, v7
+    neg-float v11, v11
+    invoke-virtual {v6, v11}, Landroid/view/View;->setRotationY(F)V
+
+    :next
+    add-int/lit8 v5, v5, 0x1
+    goto :loop
+    :done
+    return-void
+    :try_end_0
+    .catch Ljava/lang/Throwable; {:try_start_0 .. :done} :catch_0
+    :catch_0
+    move-exception v0
     return-void
 .end method"""
 
@@ -31,9 +103,14 @@ if count != 1:
     raise SystemExit("Could not replace ModStack.apply")
 
 params_method = r""".method public static params(I)[F
-    .locals 1
+    .locals 3
     const/4 v0, 0x4
     new-array v0, v0, [F
+    if-eqz p0, :params_done
+    const/high16 v1, 0x41000000    # 8.0f
+    const/4 v2, 0x0
+    aput v1, v0, v2
+    :params_done
     return-object v0
 .end method"""
 stack, count = re.subn(
@@ -78,4 +155,4 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Disabled custom Recents transforms to preserve native Quickstep card layout and animations; applied Dock Studio swipe-fade drawing.")
+print("Kept Stock Recents transforms native; iOS Stacked uses a restrained 8-degree Y tilt only during paging; applied Icon Lab controls and Dock Studio swipe-fade drawing.")

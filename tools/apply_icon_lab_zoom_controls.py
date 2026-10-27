@@ -308,8 +308,8 @@ smali.write_text(text)
 prefs = root / "res/xml/launcher_preferences.xml"
 text = prefs.read_text()
 anchor = '<com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_shape_entries" android:title="Icon shape" android:key="mod_icon_shape" android:summary="%s" android:defaultValue="0" android:entryValues="@array/mod_icon_shape_values" />'
-addition = anchor + '\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_zoom_entries" android:title="Icon foreground zoom" android:key="mod_icon_zoom" android:summary="%s" android:defaultValue="100" android:entryValues="@array/mod_icon_zoom_values" />\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_inset_entries" android:title="Icon safe-zone padding" android:key="mod_icon_inset" android:summary="%s" android:defaultValue="0" android:entryValues="@array/mod_icon_inset_values" />'
-if "mod_icon_zoom" not in text:
+addition = anchor + '\n        <androidx.preference.EditTextPreference android:persistent="true" android:title="Icon pack" android:key="mod_icon_pack" android:summary="Enter the installed icon pack package name; leave blank for system icons." android:defaultValue="" />\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_zoom_entries" android:title="Icon foreground zoom" android:key="mod_icon_zoom" android:summary="%s" android:defaultValue="100" android:entryValues="@array/mod_icon_zoom_values" />\n        <com.android.launcher3.widget.CustomListPreference android:persistent="true" android:entries="@array/mod_icon_inset_entries" android:title="Icon safe-zone padding" android:key="mod_icon_inset" android:summary="%s" android:defaultValue="0" android:entryValues="@array/mod_icon_inset_values" />'
+if "mod_icon_pack" not in text or "mod_icon_zoom" not in text:
     if anchor not in text:
         raise SystemExit("Could not find Icon shape preference insertion point")
     text = text.replace(anchor, addition, 1)
@@ -342,7 +342,15 @@ text = prefs_smali.read_text()
 anchor = """    const-string v0, "mod_row_extra"
 
     invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z"""
-addition = """    const-string v0, "mod_icon_zoom"
+addition = """    const-string v0, "mod_icon_pack"
+
+    invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-nez v0, :cond_0
+
+    const-string v0, "mod_icon_zoom"
 
     invoke-virtual {v0, p2}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
 
@@ -365,4 +373,4 @@ if "const-string v0, \"mod_icon_zoom\"" not in text:
     text = text.replace(anchor, addition, 1)
 prefs_smali.write_text(text)
 
-print("Applied Icon Lab foreground zoom and safe-zone padding controls.")
+print("Applied Icon Lab icon-pack package selector, foreground zoom, and safe-zone padding controls.")
