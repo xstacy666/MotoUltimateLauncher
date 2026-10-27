@@ -58,6 +58,29 @@ arrays_text = replace_string_array(arrays_text, "mod_recents_entries", ["Stock",
 arrays_text = replace_string_array(arrays_text, "mod_recents_values", ["0", "1"])
 arrays_path.write_text(arrays_text)
 
+# First launch should use native Stock Recents rather than opt users into an
+# experimental stacked layout before it has been verified on-device.
+prefs_path = root / "res/xml/launcher_preferences.xml"
+prefs_text = prefs_path.read_text()
+style_pref = re.compile(r'(<[^>]+android:key="mod_recents_style"[^>]*android:defaultValue=")1(")')
+prefs_text, pref_count = style_pref.subn(r'\g<1>0\2', prefs_text, count=1)
+if pref_count != 1:
+    # Attribute order can vary; locate the preference element by key first.
+    lines = prefs_text.splitlines()
+    found = False
+    for i, line in enumerate(lines):
+        if 'android:key="mod_recents_style"' in line:
+            updated, n = re.subn(r'android:defaultValue="[^"]+"', 'android:defaultValue="0"', line, count=1)
+            if n != 1:
+                raise SystemExit("Could not set Stock Recents default")
+            lines[i] = updated
+            found = True
+            break
+    if not found:
+        raise SystemExit("Could not find mod_recents_style preference")
+    prefs_text = "\\n".join(lines) + ("\\n" if prefs_text.endswith("\\n") else "")
+prefs_path.write_text(prefs_text)
+
 
 # Dock: don't skip drawing the glass/background merely because Hotseat's alpha
 # briefly drops during swipe transitions. The parent still composites the view alpha.
