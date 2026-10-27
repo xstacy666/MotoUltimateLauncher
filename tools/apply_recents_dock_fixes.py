@@ -100,13 +100,13 @@ if count != 1:
     raise SystemExit("Could not replace ModStack.apply")
 
 params_method = r""".method public static params(I)[F
-    .locals 2
+    .locals 3
     const/4 v0, 0x4
     new-array v0, v0, [F
     if-eqz p0, :params_done
     const/high16 v1, 0x41000000    # 8.0f
-    const/4 v0, 0x0
-    aput v1, v0, v0
+    const/4 v2, 0x0
+    aput v1, v0, v2
     :params_done
     return-object v0
 .end method"""
