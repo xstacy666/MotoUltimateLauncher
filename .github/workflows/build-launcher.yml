@@ -93,6 +93,8 @@ jobs:
             echo "Unsigned APK SHA-256:"
             cat work/output/apk-sha256.txt
           } > MotoLauncher3-build-report.txt
+      - name: Verify custom settings resources
+        run: bash tools/verify_feature_resources.sh MotoLauncher3-Ultimate-unsigned.apk
       - name: Sign and verify APK
         shell: bash
         run: |
