@@ -30,33 +30,51 @@ jobs:
           sudo mv apktool /usr/local/bin/apktool
           sudo mv apktool.jar /usr/local/bin/apktool.jar
           apktool --version
-      - name: Validate and extract complete patched source
+      - name: Validate patched source and decode original without OEM resource relinking
         shell: bash
         run: |
           set -euo pipefail
           ARCHIVE=source/MotoLauncher3_Ultimate_Patched_All.zip
+          ORIGINAL=source/MotoLauncher3_Ultimate.apk
           test -s "$ARCHIVE"
+          test -s "$ORIGINAL"
           unzip -tq "$ARCHIVE"
           mkdir -p work
           unzip -q "$ARCHIVE" -d work/source
-          DECODED="$(find work/source -type f -name apktool.yml -print -quit | xargs -r dirname)"
-          if [ -z "$DECODED" ]; then
-            echo "::error::The patched source archive does not contain an Apktool project (apktool.yml)."
+          PATCHED_ROOT="$(find work/source -type f -name apktool.yml -print -quit | xargs -r dirname)"
+          if [ -z "$PATCHED_ROOT" ]; then
+            echo "::error::Patched source archive has no apktool.yml."
             exit 1
           fi
-          test -d "$DECODED/smali" -o -d "$DECODED/smali_classes2"
-          echo "Decoded project: $DECODED"
-          echo "DECODED=$DECODED" >> "$GITHUB_ENV"
-          find "$DECODED" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
-          if ! find "$DECODED" -type f -name 'ModStack.smali' | grep -q .; then
-            echo "::error::No ModStack.smali was found in the patched source archive."
-            exit 1
-          fi
-      - name: Build full patched source without relinking OEM resources
+          test -f "$PATCHED_ROOT/smali/com/android/launcher3/ModStack.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/launcher3/ModStack.smali"
+          apktool d -f -r "$ORIGINAL" -o work/decoded
+          cp -a work/decoded/smali work/baseline-smali
+          echo "PATCHED_ROOT=$PATCHED_ROOT" >> "$GITHUB_ENV"
+          echo "DECODED=work/decoded" >> "$GITHUB_ENV"
+          find "$PATCHED_ROOT" -maxdepth 1 -type d -name 'smali*' -print | sort > work/smali-roots.txt
+          test -s work/smali-roots.txt
+          cat work/smali-roots.txt
+      - name: Overlay all patched Smali source trees
         shell: bash
         run: |
           set -euo pipefail
-          apktool b --no-res "$DECODED" -o MotoLauncher3-Ultimate-unsigned.apk
+          while IFS= read -r SRC; do
+            NAME="$(basename "$SRC")"
+            mkdir -p "$DECODED/$NAME"
+            cp -a "$SRC/." "$DECODED/$NAME/"
+          done < work/smali-roots.txt
+          if diff -qr work/baseline-smali "$DECODED/smali" > work/smali-diff.txt; then
+            echo "::error::No changes detected in the primary Smali tree after applying the patched source."
+            exit 1
+          fi
+          echo "Primary Smali changes:"
+          sed -n '1,80p' work/smali-diff.txt
+          find "$DECODED" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
+      - name: Build patched code while preserving OEM resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          apktool b "$DECODED" -o MotoLauncher3-Ultimate-unsigned.apk
           test -s MotoLauncher3-Ultimate-unsigned.apk
           mkdir -p work/output
           unzip -Z1 MotoLauncher3-Ultimate-unsigned.apk | grep -E '^classes([0-9]+)?\.dex$' | sort > work/output/dex-list.txt
@@ -64,11 +82,13 @@ jobs:
           cat work/output/dex-list.txt
           sha256sum MotoLauncher3-Ultimate-unsigned.apk | tee work/output/apk-sha256.txt
           {
-            echo "Build mode: complete patched Apktool project (--no-res)"
+            echo "Build mode: stock APK decoded with -r; all patched Smali trees overlaid"
             echo "Smali source file count: $(cat work/smali-count.txt)"
+            echo "Changed primary Smali entries:"
+            sed -n '1,80p' work/smali-diff.txt
             echo "DEX files in output:"
             cat work/output/dex-list.txt
-            echo "APK SHA-256:"
+            echo "Unsigned APK SHA-256:"
             cat work/output/apk-sha256.txt
           } > MotoLauncher3-build-report.txt
       - name: Sign and verify APK
