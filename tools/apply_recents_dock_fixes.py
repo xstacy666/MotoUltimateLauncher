@@ -155,4 +155,30 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Kept Stock Recents transforms native; iOS Stacked uses a restrained 8-degree Y tilt only during paging; applied Icon Lab controls and Dock Studio swipe-fade drawing.")
+# Re-apply/reset the custom transform after native page offsets are recalculated.
+# The existing hook only runs on scroll; a fresh layout or task-list update can
+# otherwise leave a stale rotation behind until the next swipe.
+recents_path = find_smali("com/android/quickstep/views/RecentsView.smali")
+recents = recents_path.read_text()
+layout_start = re.search(r"(?m)^\.method protected onLayout\(ZIIII\)V$", recents)
+if not layout_start:
+    raise SystemExit("Could not find RecentsView.onLayout")
+layout_end = recents.find(".end method", layout_start.end())
+if layout_end < 0:
+    raise SystemExit("Could not find end of RecentsView.onLayout")
+layout_method = recents[layout_start.start():layout_end]
+hook = "    invoke-static {p0}, Lcom/android/launcher3/ModStack;->apply(Landroid/view/ViewGroup;)V"
+if hook not in layout_method:
+    anchor = "    invoke-direct {p0}, Lcom/android/quickstep/views/RecentsView;->updatePageOffsets()V"
+    if anchor not in layout_method:
+        raise SystemExit("Could not find updatePageOffsets in RecentsView.onLayout")
+    layout_method = layout_method.replace(anchor, anchor + "\n\n    # Reconcile custom Recents transforms after native layout/offset calculation.\n" + hook, 1)
+    recents = recents[:layout_start.start()] + layout_method + recents[layout_end:]
+    recents_path.write_text(recents)
+
+# Guard the expected integration points so future source changes fail loudly.
+recents_check = recents_path.read_text()
+if recents_check.count("ModStack;->apply(Landroid/view/ViewGroup;)V") < 2:
+    raise SystemExit("Expected ModStack hooks in both RecentsView.onLayout and onScrollChanged")
+
+print("Stock mode clears stale 3D transforms; iOS style keeps only an 8-degree Y tilt. Reconcile transforms after layout and scrolling; preserve native page positioning/scale animations.")
