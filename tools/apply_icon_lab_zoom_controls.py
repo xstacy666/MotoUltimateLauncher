@@ -238,7 +238,7 @@ text = smali.read_text()
 text, count = re.subn(r"(?s)\.method public static draw\(Landroid/graphics/drawable/Drawable;Landroid/graphics/Canvas;Landroid/content/Context;\)V.*?\.end method", draw_method, text, count=1)
 if count != 1:
     raise SystemExit("Could not replace ModShape.draw")
-if "adjustForegroundBounds" not in text:
+if ".method public static adjustForegroundBounds(" not in text:
     text = text.replace(".method public static makePath(IFFF)Landroid/graphics/Path;", helper_method + "\n\n.method public static makePath(IFFF)Landroid/graphics/Path;", 1)
 smali.write_text(text)
 
