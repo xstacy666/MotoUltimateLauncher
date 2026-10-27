@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fix Recents card spacing/over-rotation and keep Dock Studio drawing through swipe fades."""
+"""Keep stock Recents paging/scrolling intact, flatten card transforms, and keep Dock Studio drawing through swipe fades."""
 from pathlib import Path
 import re
 import sys
@@ -12,8 +12,8 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# Recents: spread cards horizontally based on their position in the viewport.
-# Keep all styles intentionally subtle; the stock style still gets spacing but no 3-D transforms.
+# Recents: restore stock paging and scrolling behavior. Only clear residual transforms;
+# do not calculate card positions or offsets in ModStack.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
@@ -31,26 +31,11 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     instance-of v4, v3, Lcom/android/quickstep/views/TaskView;
     if-eqz v4, :next
 
-    # Center the task sequence, then move each card by 0.88 card-width per slot.
-    # This restores a real visible gap instead of tiny viewport-based translations.
-    invoke-virtual {v3}, Landroid/view/View;->getWidth()I
-    move-result v5
-    if-lez v5, :reset
-    int-to-float v6, v5
-    int-to-float v7, v2
-    add-int/lit8 v8, v1, -0x1
-    int-to-float v8, v8
-    const/high16 v11, 0x3f000000    # 0.5f
-    mul-float/2addr v8, v11
-    sub-float/2addr v7, v8
-    const v9, 0x3f6147ae    # 0.88f
-    mul-float/2addr v7, v9
-    mul-float/2addr v7, v6
-    invoke-virtual {v3, v7}, Landroid/view/View;->setTranslationX(F)V
-    goto :reset
-
-    :reset
+    # Preserve stock RecentsView paging/layout. Do not translate cards by child index:
+    # those offsets fight Quickstep's live scroll/animation positions and push cards offscreen.
+        :reset
     const/4 v9, 0x0
+    invoke-virtual {v3, v9}, Landroid/view/View;->setTranslationX(F)V
     invoke-virtual {v3, v9}, Landroid/view/View;->setRotationY(F)V
     invoke-virtual {v3, v9}, Landroid/view/View;->setRotationX(F)V
     invoke-virtual {v3, v9}, Landroid/view/View;->setRotation(F)V
