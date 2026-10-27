@@ -42,6 +42,16 @@ if [[ "$changed" -ne 1 ]]; then
   exit 1
 fi
 
+# Reject the exact DEX that was shipped in the last APK (build #72).
+# This closes the gap in the old guard, which only compared against the original APK
+# and therefore accepted repeated builds with no new compiled change.
+PREVIOUS_CLASSES_DEX_SHA256="12102d304f808762ae9dd710b98160ef062af77f5ef01936520594c49d65f9cc"
+BUILT_CLASSES_DEX_SHA256="$(sha256sum "$TMP/built/classes.dex" | awk '{print $1}')"
+if [[ "$BUILT_CLASSES_DEX_SHA256" == "$PREVIOUS_CLASSES_DEX_SHA256" ]]; then
+  echo "::error::Compiled classes.dex is byte-for-byte identical to the last delivered APK. Refusing to publish a repeat build." >&2
+  exit 1
+fi
+
 # Confirm the code path intended to control Recents actually made it into DEX.
 find "$TMP/built" -type f -name 'classes*.dex' -print0 | xargs -0 strings > "$TMP/dex-strings.txt"
 if ! grep -q 'ModStack' "$TMP/dex-strings.txt"; then
