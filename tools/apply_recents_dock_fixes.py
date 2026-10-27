@@ -19,10 +19,8 @@ stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     .locals 12
 
-    # Stock mode deliberately leaves Quickstep transforms untouched. The iOS
-    # style adds only a small Y rotation during horizontal paging; it does not
-    # scale cards or rewrite translationZ, so opening/closing animations retain
-    # ownership of their own transforms.
+    # Clear stale custom 3D transforms while leaving Quickstep positional
+    # layout and scale animations intact. iOS mode adds a restrained Y tilt.
     :try_start_0
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
     move-result-object v0
@@ -30,7 +28,6 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     const/4 v2, 0x0
     invoke-static {v0, v1, v2}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
     move-result v8
-    if-eqz v8, :done
 
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getWidth()I
     move-result v0
@@ -71,6 +68,12 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     const/high16 v9, 0x3f800000    # 1.0f
     invoke-static {v7, v9}, Ljava/lang/Math;->min(FF)F
     move-result v7
+
+    # Clear stale custom 3D transforms without touching positional layout/scale.
+    const/4 v9, 0x0
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationX(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
 
     const v9, 0x45fa0000
     invoke-virtual {v6, v9}, Landroid/view/View;->setCameraDistance(F)V
