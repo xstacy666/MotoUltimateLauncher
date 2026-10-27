@@ -78,7 +78,7 @@ if pref_count != 1:
             break
     if not found:
         raise SystemExit("Could not find mod_recents_style preference")
-    prefs_text = "\\n".join(lines) + ("\\n" if prefs_text.endswith("\\n") else "")
+    prefs_text = "\n".join(lines) + ("\n" if prefs_text.endswith("\n") else "")
 prefs_path.write_text(prefs_text)
 
 
