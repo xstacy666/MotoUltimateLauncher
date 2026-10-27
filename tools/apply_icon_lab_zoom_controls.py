@@ -24,26 +24,29 @@ if method_end < 0:
     raise SystemExit("Could not find end of initPreference method")
 method = settings_text[method_start:method_end]
 if ":mod_null_preference_key" not in method:
-    # Protect every hashCode() dispatch in initPreference; compiler output may
-    # use Object.hashCode rather than String.hashCode and may not immediately
-    # follow getKey().
+    # Null keys are legal for preference categories. Guard hashCode dispatches
+    # before the switch without depending on exact compiler formatting.
     pattern = re.compile(
-        r"(?m)^(?P<indent>[ \\t]*)invoke-virtual \\{(?P<reg>[vp]\\d+)\\}, "
-        r"Ljava/lang/[^;]+;->hashCode\\(\\)I"
+        r"(?m)^([ \t]*)invoke-virtual \{([vp]\d+)\}, .*->hashCode\(\)I"
     )
     matches = list(pattern.finditer(method))
     if not matches:
+        # Some builds use a virtual call with a different owner descriptor.
+        pattern = re.compile(
+            r"(?m)^([ \t]*)invoke-virtual \{([vp]\d+)\}, [^\n]*hashCode\(\)I"
+        )
+        matches = list(pattern.finditer(method))
+    if not matches:
         raise SystemExit("Could not find hashCode() dispatch in initPreference")
     for match in reversed(matches):
-        reg = match.group("reg")
-        indent = match.group("indent")
-        guard = indent + f"if-eqz {reg}, :mod_null_preference_key\\n"
+        indent, reg = match.group(1), match.group(2)
+        guard = indent + f"if-eqz {reg}, :mod_null_preference_key\n"
         method = method[:match.start()] + guard + method[match.start():]
     return_type = signature.group(1)
     if return_type == "V":
-        epilogue = "\\n    :mod_null_preference_key\\n    return-void\\n"
+        epilogue = "\n    :mod_null_preference_key\n    return-void\n"
     else:
-        epilogue = "\\n    :mod_null_preference_key\\n    const/4 v0, 0x1\\n    return v0\\n"
+        epilogue = "\n    :mod_null_preference_key\n    const/4 v0, 0x1\n    return v0\n"
     method += epilogue
     settings_text = settings_text[:method_start] + method + settings_text[method_end:]
     settings.write_text(settings_text)
