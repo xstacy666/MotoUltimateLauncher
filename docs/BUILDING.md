@@ -14,7 +14,7 @@ The build workflow uses:
 3. Choose **Run workflow**, or push a change under `source/**` or to the workflow file.
 4. Download **MotoLauncher3-Ultimate-Patched-CI-build** from the completed run.
 
-The workflow extracts and builds the entire Apktool project with `apktool b --no-res`, rather than copying only one Smali file into a separately decoded stock APK. It signs with an ephemeral CI test key, verifies the signature and checks the package name, then publishes a build report with the APK SHA-256 and DEX inventory.
+The workflow decodes the stock APK with resources left untouched (`apktool d -r`), then overlays all Smali source trees from the patched archive before rebuilding. This preserves the OEM resource table while applying code changes across the archive, instead of copying only one Smali file. It signs with an ephemeral CI test key, verifies the signature and checks the package name, then publishes a build report with the APK SHA-256 and DEX inventory.
 
 ## Important status and limitations
 
