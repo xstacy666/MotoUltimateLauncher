@@ -58,34 +58,44 @@ jobs:
           find "$PATCHED_ROOT" -maxdepth 1 -type d -name 'smali*' -print | sort > work/smali-roots.txt
           test -s work/smali-roots.txt
           cat work/smali-roots.txt
-      - name: Overlay patched Smali while preserving stock Quickstep / Recents source
+      - name: Restore stock Quickstep / Recents Smali inside the actual build project
         shell: bash
         run: |
           set -euo pipefail
-          while IFS= read -r SRC; do
-            NAME="$(basename "$SRC")"
-            while IFS= read -r FILE; do
-              REL="${FILE#"$SRC"/}"
-              # The bundled patched tree comes from a different decompile/base.
-              # Never overlay its Recents/Quickstep implementation onto the stock APK.
-              case "$REL" in
-                com/android/quickstep/*|com/android/launcher3/uioverrides/QuickstepLauncher.smali|com/android/systemui/shared/system/QuickStepContract.smali|com/android/systemui/animation/ActivityTransitionAnimator\$AnimationDelegate.smali)
-                  echo "Preserving stock $NAME/$REL"
-                  continue
-                  ;;
-              esac
-              mkdir -p "$DECODED/$NAME/$(dirname "$REL")"
-              cp "$FILE" "$DECODED/$NAME/$REL"
-            done < <(find "$SRC" -type f -name '*.smali' -print)
-          done < work/smali-roots.txt
-          if diff -qr work/baseline-smali "$DECODED/smali" > work/smali-diff.txt; then
-            echo "::error::No changes detected in the primary Smali tree after applying the patched source."
-            exit 1
-          fi
-          echo "Primary Smali changes:"
+          # The APK is assembled from PATCHED_ROOT, not DECODED. Restore stock Quickstep
+          # files into PATCHED_ROOT itself so the build cannot ship the stale Recents code.
+          find "$PATCHED_ROOT" -type d -path '*/com/android/quickstep' -prune -exec rm -rf {} +
+          while IFS= read -r STOCK_ROOT; do
+            if [ -d "$STOCK_ROOT/com/android/quickstep" ]; then
+              NAME="$(basename "$STOCK_ROOT")"
+              mkdir -p "$PATCHED_ROOT/$NAME/com/android"
+              cp -a "$STOCK_ROOT/com/android/quickstep" "$PATCHED_ROOT/$NAME/com/android/"
+            fi
+          done < <(find "$DECODED" -maxdepth 1 -type d -name 'smali*' -print | sort)
+
+          restore_stock_file() {
+            local REL="$1"
+            find "$PATCHED_ROOT" -type f -path "*/$REL" -delete
+            while IFS= read -r STOCK_ROOT; do
+              if [ -f "$STOCK_ROOT/$REL" ]; then
+                local NAME
+                NAME="$(basename "$STOCK_ROOT")"
+                mkdir -p "$PATCHED_ROOT/$NAME/$(dirname "$REL")"
+                cp "$STOCK_ROOT/$REL" "$PATCHED_ROOT/$NAME/$REL"
+              fi
+            done < <(find "$DECODED" -maxdepth 1 -type d -name 'smali*' -print | sort)
+          }
+          restore_stock_file 'com/android/launcher3/uioverrides/QuickstepLauncher.smali'
+          restore_stock_file 'com/android/systemui/shared/system/QuickStepContract.smali'
+          restore_stock_file 'com/android/systemui/animation/ActivityTransitionAnimator$AnimationDelegate.smali'
+
+          test -f "$PATCHED_ROOT/smali/com/android/quickstep/views/RecentsView.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/quickstep/views/RecentsView.smali"
+          test -f "$PATCHED_ROOT/smali/com/android/quickstep/views/TaskView.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/quickstep/views/TaskView.smali"
+          echo "Restored stock RecentsView, TaskView, and the complete Quickstep package from the original APK."
+          diff -qr work/baseline-smali "$PATCHED_ROOT/smali" > work/smali-diff.txt || true
+          echo "Primary Smali differences from stock:"
           sed -n '1,80p' work/smali-diff.txt
-          echo "Stock Quickstep/Recents classes preserved from original APK."
-          find "$DECODED" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
+          find "$PATCHED_ROOT" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
       - name: Build complete patched source and settings resources
         shell: bash
         run: |
