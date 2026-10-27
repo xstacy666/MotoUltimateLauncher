@@ -43,11 +43,12 @@ if [[ "$changed" -ne 1 ]]; then
 fi
 
 # Confirm the code path intended to control Recents actually made it into DEX.
-if ! find "$TMP/built" -type f -name 'classes*.dex' -print0 | xargs -0 strings | grep -q 'ModStack'; then
+find "$TMP/built" -type f -name 'classes*.dex' -print0 | xargs -0 strings > "$TMP/dex-strings.txt"
+if ! grep -q 'ModStack' "$TMP/dex-strings.txt"; then
   echo "::error::Compiled DEX does not contain ModStack; Recents patch is not present." >&2
   exit 1
 fi
-if ! find "$TMP/built" -type f -name 'classes*.dex' -print0 | xargs -0 strings | grep -q 'mod_recents_style'; then
+if ! grep -q 'mod_recents_style' "$TMP/dex-strings.txt"; then
   echo "::error::Compiled DEX does not contain mod_recents_style; Recents preference is not wired into code." >&2
   exit 1
 fi
