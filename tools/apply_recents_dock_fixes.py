@@ -38,7 +38,8 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     if-lez v5, :reset
     int-to-float v6, v5
     int-to-float v7, v2
-    int-to-float v8, v1
+    add-int/lit8 v8, v1, -0x1
+    int-to-float v8, v8
     const/high16 v11, 0x3f000000    # 0.5f
     mul-float/2addr v8, v11
     sub-float/2addr v7, v8
