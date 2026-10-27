@@ -1,47 +1,30 @@
 name: Build Moto Launcher APK
-
 on:
   workflow_dispatch:
   push:
     paths:
       - 'source/**'
       - '.github/workflows/build-launcher.yml'
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Set up Android SDK tools
-        uses: android-actions/setup-android@v4
+      - uses: android-actions/setup-android@v4
         with:
           packages: ''
-
       - name: Install Android build tools
-        shell: bash
         run: |
           set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-          test -n "$SDK_ROOT"
-          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --licenses >/dev/null || true
           sdkmanager "build-tools;35.0.0"
-          test -x "$SDK_ROOT/build-tools/35.0.0/apksigner"
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-
-      - name: Install apktool
-        shell: bash
+      - name: Install Apktool
         run: |
           set -euo pipefail
           curl -fsSL https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -o apktool
@@ -49,78 +32,34 @@ jobs:
           chmod +x apktool
           sudo mv apktool /usr/local/bin/apktool
           sudo mv apktool.jar /usr/local/bin/apktool.jar
-          apktool --version
-
-      - name: Prepare decoded source
-        shell: bash
+      - name: Prepare source
         run: |
           set -euo pipefail
-          mkdir -p work
-          DECODED=""
-
-          # Prefer an extracted project if one was committed; otherwise accept
-          # the documented archive and common alternate archive names.
-          for candidate in source/decoded_v2 source/decoded source; do
-            if [ -f "$candidate/apktool.yml" ]; then
-              DECODED="$candidate"
-              break
-            fi
-          done
-
-          if [ -z "$DECODED" ]; then
-            ARCHIVE=""
-            for candidate in \
-              source/MotoLauncher3_Ultimate_patched_sources.zip \
-              source/MotoLauncher3_Ultimate_Patched_All.zip \
-              source/moto-decoded.zip; do
-              if [ -f "$candidate" ]; then
-                ARCHIVE="$candidate"
-                break
-              fi
-            done
-            if [ -z "$ARCHIVE" ]; then
-              ARCHIVE="$(find source -maxdepth 1 -type f -name '*.zip' -print -quit 2>/dev/null || true)"
-            fi
-            if [ -z "$ARCHIVE" ]; then
-              echo "::error::No decoded source found. Upload the patched Apktool project (apktool.yml plus smali/res files) under source/, either extracted or as a ZIP."
-              echo "Expected archive: source/MotoLauncher3_Ultimate_patched_sources.zip"
-              exit 1
-            fi
-            echo "Using source archive: $ARCHIVE"
-            unzip -q "$ARCHIVE" -d work
-            DECODED="$(find work -type f -name apktool.yml -print -quit | xargs -r dirname)"
-          fi
-
-          if [ -z "$DECODED" ] || [ ! -f "$DECODED/apktool.yml" ]; then
-            echo "::error::No valid Apktool project found (apktool.yml missing)."
+          ORIGINAL=source/MotoLauncher3_Ultimate.apk
+          if [ ! -f "$ORIGINAL" ]; then
+            echo "::error::Upload the original APK as source/MotoLauncher3_Ultimate.apk. A fully decoded ZIP cannot preserve the original OEM resource table."
             exit 1
           fi
-          echo "Building project at: $DECODED"
-          echo "DECODED=$DECODED" >> "$GITHUB_ENV"
-
-      - name: Build APK without rebuilding OEM resources
-        shell: bash
+          mkdir -p work
+          unzip -q source/MotoLauncher3_Ultimate_Patched_All.zip -d work/source-archive
+          PATCHED="$(find work/source-archive -type f -path '*/smali/com/android/launcher3/ModStack.smali' -print -quit)"
+          test -n "$PATCHED"
+          apktool d -f -r "$ORIGINAL" -o work/decoded
+          mkdir -p work/decoded/smali/com/android/launcher3
+          cp "$PATCHED" work/decoded/smali/com/android/launcher3/ModStack.smali
+          echo "DECODED=work/decoded" >> "$GITHUB_ENV"
+      - name: Build APK
         run: |
           set -euo pipefail
-          apktool b "$DECODED" --no-res -o MotoLauncher3-Ultimate-unsigned.apk
+          apktool b "$DECODED" -o MotoLauncher3-Ultimate-unsigned.apk
           test -s MotoLauncher3-Ultimate-unsigned.apk
-
-      - name: Sign APK with temporary CI key
-        shell: bash
+      - name: Sign APK
         run: |
           set -euo pipefail
-          keytool -genkeypair -noprompt -keystore ci-test.jks -alias launcher-ci \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass ci-test-password -keypass ci-test-password \
-            -dname "CN=Moto Launcher CI Test"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
-            --ks ci-test.jks --ks-key-alias launcher-ci \
-            --ks-pass pass:ci-test-password --key-pass pass:ci-test-password \
-            --out MotoLauncher3-Ultimate-CI-signed.apk MotoLauncher3-Ultimate-unsigned.apk
+          keytool -genkeypair -noprompt -keystore ci-test.jks -alias launcher-ci -keyalg RSA -keysize 2048 -validity 10000 -storepass ci-test-password -keypass ci-test-password -dname "CN=Moto Launcher CI Test"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks ci-test.jks --ks-key-alias launcher-ci --ks-pass pass:ci-test-password --key-pass pass:ci-test-password --out MotoLauncher3-Ultimate-CI-signed.apk MotoLauncher3-Ultimate-unsigned.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose MotoLauncher3-Ultimate-CI-signed.apk
-
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: MotoLauncher3-Ultimate-CI-build
           path: |
