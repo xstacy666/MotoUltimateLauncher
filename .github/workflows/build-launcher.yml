@@ -58,40 +58,11 @@ jobs:
           find "$PATCHED_ROOT" -maxdepth 1 -type d -name 'smali*' -print | sort > work/smali-roots.txt
           test -s work/smali-roots.txt
           cat work/smali-roots.txt
-      - name: Restore stock Quickstep / Recents Smali inside the actual build project
+      - name: Restore and verify stock Recents / transition classes
         shell: bash
         run: |
           set -euo pipefail
-          # The APK is assembled from PATCHED_ROOT, not DECODED. Restore stock Quickstep
-          # files into PATCHED_ROOT itself so the build cannot ship the stale Recents code.
-          find "$PATCHED_ROOT" -type d -path '*/com/android/quickstep' -prune -exec rm -rf {} +
-          while IFS= read -r STOCK_ROOT; do
-            if [ -d "$STOCK_ROOT/com/android/quickstep" ]; then
-              NAME="$(basename "$STOCK_ROOT")"
-              mkdir -p "$PATCHED_ROOT/$NAME/com/android"
-              cp -a "$STOCK_ROOT/com/android/quickstep" "$PATCHED_ROOT/$NAME/com/android/"
-            fi
-          done < <(find "$DECODED" -maxdepth 1 -type d -name 'smali*' -print | sort)
-
-          restore_stock_file() {
-            local REL="$1"
-            find "$PATCHED_ROOT" -type f -path "*/$REL" -delete
-            while IFS= read -r STOCK_ROOT; do
-              if [ -f "$STOCK_ROOT/$REL" ]; then
-                local NAME
-                NAME="$(basename "$STOCK_ROOT")"
-                mkdir -p "$PATCHED_ROOT/$NAME/$(dirname "$REL")"
-                cp "$STOCK_ROOT/$REL" "$PATCHED_ROOT/$NAME/$REL"
-              fi
-            done < <(find "$DECODED" -maxdepth 1 -type d -name 'smali*' -print | sort)
-          }
-          restore_stock_file 'com/android/launcher3/uioverrides/QuickstepLauncher.smali'
-          restore_stock_file 'com/android/systemui/shared/system/QuickStepContract.smali'
-          restore_stock_file 'com/android/systemui/animation/ActivityTransitionAnimator$AnimationDelegate.smali'
-
-          test -f "$PATCHED_ROOT/smali/com/android/quickstep/views/RecentsView.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/quickstep/views/RecentsView.smali"
-          test -f "$PATCHED_ROOT/smali/com/android/quickstep/views/TaskView.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/quickstep/views/TaskView.smali"
-          echo "Restored stock RecentsView, TaskView, and the complete Quickstep package from the original APK."
+          bash tools/restore_stock_recents.sh "$PATCHED_ROOT" "$DECODED"
           diff -qr work/baseline-smali "$PATCHED_ROOT/smali" > work/smali-diff.txt || true
           echo "Primary Smali differences from stock:"
           sed -n '1,80p' work/smali-diff.txt
