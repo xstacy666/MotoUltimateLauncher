@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep stock Quickstep paging intact and implement a safe iOS-style stacked-card transform."""
+"""Preserve native Quickstep transforms while restoring Recents spacing and Icon Lab build patches."""
 from pathlib import Path
 import re
 import sys
@@ -12,17 +12,16 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# Recents: restore stock paging and scrolling behavior. Only clear residual transforms;
-# do not calculate card positions or offsets in ModStack.
+# Quickstep must own TaskView transforms: custom per-frame transforms conflict with
+# Recents transition animations. Keep this callback inert, but preserve the native
+# parameter preset values below because Quickstep uses them for card spacing.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
-apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
+apply_method = """.method public static apply(Landroid/view/ViewGroup;)V
     .locals 0
-    # Quickstep owns TaskView transforms and animations. Never write transforms
-    # from this callback: it is invoked during paging/transition frames.
+    # Do not overwrite TaskView transforms during Quickstep paging/transition frames.
     return-void
 .end method"""
-
 stack, count = re.subn(
     r"(?s)\.method public static apply\(Landroid/view/ViewGroup;\)V.*?\.end method",
     apply_method, stack, count=1
@@ -30,21 +29,33 @@ stack, count = re.subn(
 if count != 1:
     raise SystemExit("Could not replace ModStack.apply")
 
-params_method = r""".method public static params(I)[F
+# Stock (0) keeps the native zero-offset preset; iOS (1) retains its 24dp
+# spacing preset so cards do not collapse onto one another.
+params_method = """.method public static params(I)[F
     .locals 1
     const/4 v0, 0x4
     new-array v0, v0, [F
+    if-eqz p0, :params_done
+    fill-array-data v0, :ios_array
+    :params_done
     return-object v0
+    :ios_array
+    .array-data 4
+        0x0
+        0x0
+        0x0
+        0x41c00000
+    .end array-data
 .end method"""
 stack, count = re.subn(
     r"(?s)\.method public static params\(I\)\[F.*?\.end method",
     params_method, stack, count=1
 )
 if count != 1:
-    raise SystemExit("Could not replace ModStack.params")
+    raise SystemExit("Could not restore ModStack.params spacing preset")
 stack_path.write_text(stack)
 
-# Keep exactly two user-facing Recents choices: Stock and iOS 26 stacked.
+# Keep exactly two user-facing Recents choices.
 arrays_path = root / "res/values/arrays.xml"
 arrays_text = arrays_path.read_text()
 def replace_string_array(source, name, items):
@@ -58,6 +69,26 @@ arrays_text = replace_string_array(arrays_text, "mod_recents_entries", ["Stock",
 arrays_text = replace_string_array(arrays_text, "mod_recents_values", ["0", "1"])
 arrays_path.write_text(arrays_text)
 
+# Default to Stock for first launch; users can still select iOS 26 stacked.
+prefs_path = root / "res/xml/launcher_preferences.xml"
+prefs = prefs_path.read_text()
+key_pos = prefs.find('key="mod_recents_style"')
+if key_pos < 0:
+    key_pos = prefs.find('android:key="mod_recents_style"')
+if key_pos < 0:
+    raise SystemExit("Could not find mod_recents_style preference")
+tag_start = prefs.rfind("<", 0, key_pos)
+tag_end = prefs.find(">", key_pos)
+if tag_start < 0 or tag_end < 0:
+    raise SystemExit("Could not locate Recents preference XML tag")
+tag = prefs[tag_start:tag_end + 1]
+if 'defaultValue="0"' not in tag and 'android:defaultValue="0"' not in tag:
+    tag_new, n = re.subn(r'((?:android:)?defaultValue=")[^"]*(")', r'\g<1>0\2', tag, count=1)
+    if n == 0:
+        # Insert a default only if this preference doesn't declare one.
+        tag_new = tag[:-1] + ' android:defaultValue="0">'
+    prefs = prefs[:tag_start] + tag_new + prefs[tag_end + 1:]
+    prefs_path.write_text(prefs)
 
 # Dock: don't skip drawing the glass/background merely because Hotseat's alpha
 # briefly drops during swipe transitions. The parent still composites the view alpha.
@@ -78,4 +109,4 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Disabled custom Recents transforms to preserve native Quickstep card layout and animations; applied Dock Studio swipe-fade drawing.")
+print("Preserved Quickstep animation ownership, restored Recents spacing presets, defaulted Recents to Stock, and applied Dock Studio swipe-fade drawing.")
