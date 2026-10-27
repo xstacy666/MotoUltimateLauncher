@@ -79,6 +79,7 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     invoke-virtual {v6, v9}, Landroid/view/View;->setCameraDistance(F)V
     const/4 v9, 0x0
     invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
+    if-eqz v8, :stock_style
 
     # Upright iOS-style stepped stack: off-centre cards shrink by up to 10%
     # and step down by up to 48 px. Do not touch native X positions or scroll.
@@ -93,6 +94,12 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     const/high16 v9, 0x42400000    # 48.0f
     mul-float/2addr v11, v9
     invoke-virtual {v6, v11}, Landroid/view/View;->setTranslationY(F)V
+    goto :next
+
+    :stock_style
+    # Clear our vertical offset but leave Quickstep's native scale animation alone.
+    const/4 v9, 0x0
+    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationY(F)V
 
     :next
     add-int/lit8 v5, v5, 0x1
