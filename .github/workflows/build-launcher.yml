@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'source/**'
+      - 'tools/**'
       - '.github/workflows/build-launcher.yml'
 permissions:
   contents: read
@@ -49,6 +50,7 @@ jobs:
           test -f "$PATCHED_ROOT/smali/com/android/launcher3/ModStack.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/launcher3/ModStack.smali"
           apktool d -f -r "$ORIGINAL" -o work/decoded
           cp -a work/decoded/smali work/baseline-smali
+          bash tools/prepare_resource_build.sh "$PATCHED_ROOT"
           echo "PATCHED_ROOT=$PATCHED_ROOT" >> "$GITHUB_ENV"
           echo "DECODED=work/decoded" >> "$GITHUB_ENV"
           find "$PATCHED_ROOT" -maxdepth 1 -type d -name 'smali*' -print | sort > work/smali-roots.txt
@@ -74,7 +76,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apktool b --use-aapt1 "$PATCHED_ROOT" -o MotoLauncher3-Ultimate-unsigned.apk
+          apktool b "$PATCHED_ROOT" -o MotoLauncher3-Ultimate-unsigned.apk
           test -s MotoLauncher3-Ultimate-unsigned.apk
           mkdir -p work/output
           unzip -Z1 MotoLauncher3-Ultimate-unsigned.apk | grep -E '^classes([0-9]+)?\.dex$' | sort > work/output/dex-list.txt
