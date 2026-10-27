@@ -96,7 +96,7 @@ apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     return-void
 .end method"""
 
-stack, count = re.subn(stack, count = re.subn(
+stack, count = re.subn(
     r"(?s)\.method public static apply\(Landroid/view/ViewGroup;\)V.*?\.end method",
     apply_method, stack, count=1
 )
@@ -119,7 +119,7 @@ params_method = r""".method public static params(I)[F
         0x41c00000
     .end array-data
 .end method"""
-stack, count = re.subn(stack, count = re.subn(
+stack, count = re.subn(
     r"(?s)\.method public static params\(I\)\[F.*?\.end method",
     params_method, stack, count=1
 )
