@@ -132,8 +132,8 @@ arrays_path = root / "res/values/arrays.xml"
 arrays_text = arrays_path.read_text()
 def replace_string_array(source, name, items):
     pattern = re.compile(r'(?s)(<string-array name="' + re.escape(name) + r'">).*?(</string-array>)')
-    body = "\\n".join("        <item>" + item + "</item>" for item in items)
-    updated, n = pattern.subn(lambda m: m.group(1) + "\\n" + body + "\\n    " + m.group(2), source, count=1)
+    body = "\n".join("        <item>" + item + "</item>" for item in items)
+    updated, n = pattern.subn(lambda m: m.group(1) + "\n" + body + "\n    " + m.group(2), source, count=1)
     if n != 1:
         raise SystemExit("Could not find " + name + " in arrays.xml")
     return updated
