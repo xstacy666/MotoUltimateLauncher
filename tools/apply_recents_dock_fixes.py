@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep stock Quickstep paging intact and implement a safe iOS-style stacked-card transform."""
+"""Preserve Quickstep animation ownership while retaining Recents spacing parameters."""
 from pathlib import Path
 import re
 import sys
@@ -12,8 +12,9 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# Recents: restore stock paging and scrolling behavior. Only clear residual transforms;
-# do not calculate card positions or offsets in ModStack.
+# Recents: let Quickstep own animated transforms, but retain the non-zero iOS spacing
+# parameter. Returning an all-zero params array collapses the custom layout and can
+# make Recents cards overlap even when apply() does not touch their transforms.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
@@ -34,7 +35,17 @@ params_method = r""".method public static params(I)[F
     .locals 1
     const/4 v0, 0x4
     new-array v0, v0, [F
+    if-eqz p0, :params_done
+    fill-array-data v0, :ios_array
+    :params_done
     return-object v0
+    :ios_array
+    .array-data 4
+        0x0
+        0x0
+        0x0
+        0x41c00000
+    .end array-data
 .end method"""
 stack, count = re.subn(
     r"(?s)\.method public static params\(I\)\[F.*?\.end method",
@@ -78,4 +89,4 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Disabled custom Recents transforms to preserve native Quickstep card layout and animations; applied Dock Studio swipe-fade drawing.")
+print("Disabled custom Recents transforms while retaining the iOS spacing parameter to prevent zero-spacing overlap; applied Dock Studio swipe-fade drawing.")
