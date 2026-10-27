@@ -17,67 +17,46 @@ def find_smali(rel):
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
-    .locals 13
+    .locals 12
 
     :try_start_0
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getWidth()I
-    move-result v0
-    if-lez v0, :cond_done
-    int-to-float v1, v0
-    const/high16 v2, 0x3f000000    # 0.5f
-    mul-float/2addr v2, v1
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getChildCount()I
-    move-result v4
-    const/4 v5, 0x0
+    move-result v1
+    const/4 v2, 0x0
 
     :loop
-    if-ge v5, v4, :cond_done
-    invoke-virtual {p0, v5}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
-    move-result-object v6
-    instance-of v7, v6, Lcom/android/quickstep/views/TaskView;
-    if-eqz v7, :next
+    if-ge v2, v1, :cond_done
+    invoke-virtual {p0, v2}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
+    move-result-object v3
+    instance-of v4, v3, Lcom/android/quickstep/views/TaskView;
+    if-eqz v4, :next
 
-    # Re-read scroll each pass because scratch registers are reused below.
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getScrollX()I
-    move-result v3
-    int-to-float v3, v3
+    # Center the task sequence, then move each card by 0.88 card-width per slot.
+    # This restores a real visible gap instead of tiny viewport-based translations.
+    invoke-virtual {v3}, Landroid/view/View;->getWidth()I
+    move-result v5
+    if-lez v5, :reset
+    int-to-float v6, v5
+    int-to-float v7, v2
+    int-to-float v8, v1
+    const/high16 v11, 0x3f000000    # 0.5f
+    mul-float/2addr v8, v11
+    sub-float/2addr v7, v8
+    const v9, 0x3f6147ae    # 0.88f
+    mul-float/2addr v7, v9
+    mul-float/2addr v7, v6
+    invoke-virtual {v3, v7}, Landroid/view/View;->setTranslationX(F)V
+    goto :reset
 
-    # normalized card center: -1 at far left, +1 at far right
-    invoke-virtual {v6}, Landroid/view/View;->getX()F
-    move-result v8
-    invoke-virtual {v6}, Landroid/view/View;->getWidth()I
-    move-result v9
-    div-int/lit8 v12, v9, 0x2
-    int-to-float v12, v12
-    add-float/2addr v8, v12
-    sub-float/2addr v8, v3
-    sub-float/2addr v8, v2
-    div-float/2addr v8, v1
-    const/high16 v9, -0x3f800000    # -1.0f
-    invoke-static {v8, v9}, Ljava/lang/Math;->max(FF)F
-    move-result v8
-    const/high16 v9, 0x3f800000    # 1.0f
-    invoke-static {v8, v9}, Ljava/lang/Math;->min(FF)F
-    move-result v8
-
-    # Spread off-center cards outward by 22% of their width at the viewport edge.
-    invoke-virtual {v6}, Landroid/view/View;->getWidth()I
-    move-result v9
-    int-to-float v9, v9
-    const v10, 0x3e6147ae    # 0.22f
-    mul-float/2addr v9, v10
-    mul-float/2addr v9, v8
-    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationX(F)V
-
-    # Avoid the excessive 3-D transforms that made cards overlap/distort.
+    :reset
     const/4 v9, 0x0
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationX(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
-    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
+    invoke-virtual {v3, v9}, Landroid/view/View;->setRotationY(F)V
+    invoke-virtual {v3, v9}, Landroid/view/View;->setRotationX(F)V
+    invoke-virtual {v3, v9}, Landroid/view/View;->setRotation(F)V
+    invoke-virtual {v3, v9}, Landroid/view/View;->setTranslationZ(F)V
 
     :next
-    add-int/lit8 v5, v5, 0x1
+    add-int/lit8 v2, v2, 0x1
     goto :loop
 
     :cond_done
