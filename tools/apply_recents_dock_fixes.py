@@ -192,4 +192,4 @@ recents_check = recents_path.read_text()
 if recents_check.count("ModStack;->apply(Landroid/view/ViewGroup;)V") < 2:
     raise SystemExit("Expected ModStack hooks in both RecentsView.onLayout and onScrollChanged")
 
-print("Stock mode clears stale 3D transforms; iOS style keeps only an 8-degree Y tilt. Reconcile transforms after layout and scrolling; preserve native page positioning/scale animations.")
+print("Stock mode preserves native paging; iOS style uses upright cards with up to 10% scale reduction and 48 px vertical stepping. Reconcile after layout and scrolling.")
