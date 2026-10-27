@@ -11,32 +11,41 @@ settings = root / "smali/com/android/launcher3/settings/SettingsActivity$Launche
 if not settings.exists():
     raise SystemExit(f"Settings fragment Smali not found: {settings}")
 settings_text = settings.read_text()
-method_start = settings_text.find(".method protected initPreference(Landroidx/preference/Preference;)Z")
-method_end = settings_text.find(".end method", method_start)
-if method_start < 0 or method_end < 0:
-    raise SystemExit("Could not locate LauncherSettingsFragment.initPreference")
+signature = re.search(
+    r"(?m)^\\.method[^\\n]*\\binitPreference\\(Landroidx/preference/Preference;\\)([VZ])[^\\n]*$",
+    settings_text,
+)
+if not signature:
+    raise SystemExit("Could not locate initPreference(Preference) method signature")
+method_start = signature.start()
+method_end = settings_text.find(".end method", signature.end())
+if method_end < 0:
+    raise SystemExit("Could not find end of initPreference method")
 method = settings_text[method_start:method_end]
-key_sequence = """    invoke-virtual {p1}, Landroidx/preference/Preference;->getKey()Ljava/lang/String;
-
-    move-result-object v0
-
-    invoke-virtual {v0}, Ljava/lang/Object;->hashCode()I"""
-guarded_sequence = """    invoke-virtual {p1}, Landroidx/preference/Preference;->getKey()Ljava/lang/String;
-
-    move-result-object v0
-
-    if-eqz v0, :mod_null_preference_key
-
-    invoke-virtual {v0}, Ljava/lang/Object;->hashCode()I"""
 if ":mod_null_preference_key" not in method:
-    if key_sequence not in method:
-        raise SystemExit("Expected initPreference key/hashCode sequence not found")
-    method = method.replace(key_sequence, guarded_sequence, 1)
-    method += """\n    :mod_null_preference_key
-    const/4 v0, 0x1
-
-    return v0
-"""
+    # Guard whichever register receives getKey(); don't assume register v0 or
+    # a particular method visibility/return type.
+    pattern = re.compile(
+        r"(?m)^(?P<indent>[ \\t]*)move-result-object (?P<reg>[vp]\\d+)\\n"
+        r"(?P<indent2>[ \\t]*)invoke-virtual \\{(?P=reg)\\}, Ljava/lang/Object;->hashCode\\(\\)I"
+    )
+    match = pattern.search(method)
+    if not match:
+        raise SystemExit("Could not find getKey() result immediately hashed in initPreference")
+    reg = match.group("reg")
+    indent = match.group("indent2")
+    guarded = (
+        match.group(0).splitlines()[0]
+        + "\\n" + indent + f"if-eqz {reg}, :mod_null_preference_key\\n"
+        + match.group(0).splitlines()[1]
+    )
+    method = method[:match.start()] + guarded + method[match.end():]
+    return_type = signature.group(1)
+    if return_type == "V":
+        epilogue = "\\n    :mod_null_preference_key\\n    return-void\\n"
+    else:
+        epilogue = "\\n    :mod_null_preference_key\\n    const/4 v0, 0x1\\n    return v0\\n"
+    method += epilogue
     settings_text = settings_text[:method_start] + method + settings_text[method_end:]
     settings.write_text(settings_text)
     print("Added null-key guard to LauncherSettingsFragment.initPreference.")
