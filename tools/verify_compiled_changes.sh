@@ -63,6 +63,11 @@ if ! grep -q 'mod_recents_style' "$TMP/dex-strings.txt"; then
   exit 1
 fi
 
+if ! grep -q 'setScaleX' "$TMP/dex-strings.txt" || ! grep -q 'setTranslationY' "$TMP/dex-strings.txt"; then
+  echo "::error::Compiled DEX lacks the visible upright stacked-card transforms." >&2
+  exit 1
+fi
+
 # Check the actual compiled resource table for the two allowed user-facing modes.
 unzip -p "$BUILT" resources.arsc | strings > "$TMP/resources.txt"
 grep -Fq 'Stock' "$TMP/resources.txt" || { echo "::error::Recents 'Stock' label missing from compiled resources." >&2; exit 1; }
