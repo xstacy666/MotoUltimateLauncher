@@ -70,11 +70,11 @@ jobs:
           echo "Primary Smali changes:"
           sed -n '1,80p' work/smali-diff.txt
           find "$DECODED" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
-      - name: Build patched code while preserving OEM resources
+      - name: Build complete patched source and settings resources
         shell: bash
         run: |
           set -euo pipefail
-          apktool b "$DECODED" -o MotoLauncher3-Ultimate-unsigned.apk
+          apktool b "$PATCHED_ROOT" -o MotoLauncher3-Ultimate-unsigned.apk
           test -s MotoLauncher3-Ultimate-unsigned.apk
           mkdir -p work/output
           unzip -Z1 MotoLauncher3-Ultimate-unsigned.apk | grep -E '^classes([0-9]+)?\.dex$' | sort > work/output/dex-list.txt
@@ -82,7 +82,7 @@ jobs:
           cat work/output/dex-list.txt
           sha256sum MotoLauncher3-Ultimate-unsigned.apk | tee work/output/apk-sha256.txt
           {
-            echo "Build mode: stock APK decoded with -r; all patched Smali trees overlaid"
+            echo "Build mode: complete patched Apktool project, including resources and settings XML"
             echo "Smali source file count: $(cat work/smali-count.txt)"
             echo "Changed primary Smali entries:"
             sed -n '1,80p' work/smali-diff.txt
