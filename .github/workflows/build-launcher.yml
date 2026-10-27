@@ -67,3 +67,4 @@ jobs:
             MotoLauncher3-Ultimate-unsigned.apk
           if-no-files-found: error
           retention-days: 14
+# Trigger a fresh build after the stock APK upload.
