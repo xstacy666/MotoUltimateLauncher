@@ -17,99 +17,67 @@ def find_smali(rel):
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
-    .locals 18
+    .locals 13
 
     :try_start_0
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getContext()Landroid/content/Context;
-    move-result-object v0
-    const-string v1, "mod_recents_style"
-    const/4 v2, 0x0
-    invoke-static {v0, v1, v2}, Lcom/android/launcher3/ModPrefs;->getInt(Landroid/content/Context;Ljava/lang/String;I)I
-    move-result v3
-
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getWidth()I
-    move-result v4
-    if-lez v4, :cond_done
-    int-to-float v5, v4
-    const/high16 v6, 0x3f000000    # 0.5f
-    mul-float/2addr v6, v5
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getScrollX()I
-    move-result v7
-    int-to-float v7, v7
+    move-result v0
+    if-lez v0, :cond_done
+    int-to-float v1, v0
+    const/high16 v2, 0x3f000000    # 0.5f
+    mul-float/2addr v2, v1
     invoke-virtual {p0}, Landroid/view/ViewGroup;->getChildCount()I
-    move-result v8
-    const/4 v9, 0x0
+    move-result v4
+    const/4 v5, 0x0
 
     :loop
-    if-ge v9, v8, :cond_done
-    invoke-virtual {p0, v9}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
-    move-result-object v10
-    instance-of v11, v10, Lcom/android/quickstep/views/TaskView;
-    if-eqz v11, :next
+    if-ge v5, v4, :cond_done
+    invoke-virtual {p0, v5}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
+    move-result-object v6
+    instance-of v7, v6, Lcom/android/quickstep/views/TaskView;
+    if-eqz v7, :next
+
+    # Re-read scroll each pass because scratch registers are reused below.
+    invoke-virtual {p0}, Landroid/view/ViewGroup;->getScrollX()I
+    move-result v3
+    int-to-float v3, v3
 
     # normalized card center: -1 at far left, +1 at far right
-    invoke-virtual {v10}, Landroid/view/View;->getX()F
-    move-result v11
-    invoke-virtual {v10}, Landroid/view/View;->getWidth()I
-    move-result v12
-    div-int/lit8 v13, v12, 0x2
-    int-to-float v13, v13
-    add-float/2addr v11, v13
-    sub-float/2addr v11, v7
-    sub-float/2addr v11, v6
-    div-float/2addr v11, v5
-    const/high16 v12, -0x3f800000    # -1.0f
-    invoke-static {v11, v12}, Ljava/lang/Math;->max(FF)F
-    move-result v11
-    const/high16 v12, 0x3f800000    # 1.0f
-    invoke-static {v11, v12}, Ljava/lang/Math;->min(FF)F
-    move-result v11
-
-    # Push off-center cards outward by 22% of their width at the viewport edge.
-    invoke-virtual {v10}, Landroid/view/View;->getWidth()I
-    move-result v12
+    invoke-virtual {v6}, Landroid/view/View;->getX()F
+    move-result v8
+    invoke-virtual {v6}, Landroid/view/View;->getWidth()I
+    move-result v9
+    div-int/lit8 v12, v9, 0x2
     int-to-float v12, v12
-    const v13, 0x3e6147ae    # 0.22f
-    mul-float/2addr v12, v13
-    mul-float/2addr v12, v11
-    invoke-virtual {v10, v12}, Landroid/view/View;->setTranslationX(F)V
+    add-float/2addr v8, v12
+    sub-float/2addr v8, v3
+    sub-float/2addr v8, v2
+    div-float/2addr v8, v1
+    const/high16 v9, -0x3f800000    # -1.0f
+    invoke-static {v8, v9}, Ljava/lang/Math;->max(FF)F
+    move-result v8
+    const/high16 v9, 0x3f800000    # 1.0f
+    invoke-static {v8, v9}, Ljava/lang/Math;->min(FF)F
+    move-result v8
 
-    if-nez v3, :style
-    const/4 v12, 0x0
-    invoke-virtual {v10, v12}, Landroid/view/View;->setRotationY(F)V
-    invoke-virtual {v10, v12}, Landroid/view/View;->setRotationX(F)V
-    invoke-virtual {v10, v12}, Landroid/view/View;->setRotation(F)V
-    invoke-virtual {v10, v12}, Landroid/view/View;->setTranslationZ(F)V
-    goto :next
+    # Spread off-center cards outward by 22% of their width at the viewport edge.
+    invoke-virtual {v6}, Landroid/view/View;->getWidth()I
+    move-result v9
+    int-to-float v9, v9
+    const v10, 0x3e6147ae    # 0.22f
+    mul-float/2addr v9, v10
+    mul-float/2addr v9, v8
+    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationX(F)V
 
-    :style
-    invoke-static {v3}, Lcom/android/launcher3/ModStack;->params(I)[F
-    move-result-object v15
-    const/4 v12, 0x0
-    aget v13, v15, v12
-    mul-float/2addr v13, v11
-    neg-float v13, v13
-    invoke-virtual {v10, v13}, Landroid/view/View;->setRotationY(F)V
-    const/4 v12, 0x1
-    aget v13, v15, v12
-    mul-float/2addr v13, v11
-    invoke-virtual {v10, v13}, Landroid/view/View;->setRotation(F)V
-    invoke-static {v11}, Ljava/lang/Math;->abs(F)F
-    move-result v14
-    const/4 v12, 0x2
-    aget v13, v15, v12
-    mul-float/2addr v13, v14
-    invoke-virtual {v10, v13}, Landroid/view/View;->setRotationX(F)V
-    const/4 v12, 0x3
-    aget v13, v15, v12
-    mul-float/2addr v13, v14
-    neg-float v13, v13
-    invoke-virtual {v10, v13}, Landroid/view/View;->setTranslationZ(F)V
-    const v12, 0x45fa0000    # 8000.0f
-    invoke-virtual {v10, v12}, Landroid/view/View;->setCameraDistance(F)V
+    # Avoid the excessive 3-D transforms that made cards overlap/distort.
+    const/4 v9, 0x0
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationY(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotationX(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setRotation(F)V
+    invoke-virtual {v6, v9}, Landroid/view/View;->setTranslationZ(F)V
 
     :next
-    add-int/lit8 v9, v9, 0x1
+    add-int/lit8 v5, v5, 0x1
     goto :loop
 
     :cond_done
