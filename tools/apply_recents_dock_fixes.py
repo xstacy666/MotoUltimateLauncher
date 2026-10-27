@@ -12,9 +12,7 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# The patched ModStack.apply callback can be reached during paging and launch
-# transitions. Do not overwrite TaskView transforms there: Quickstep must own
-# those animated values.
+# Quickstep owns TaskView transforms and animated values.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
@@ -28,7 +26,6 @@ stack, count = re.subn(
 if count != 1:
     raise SystemExit("Could not replace ModStack.apply")
 
-# Do not return stale iOS-stack transform parameters.
 params_method = r""".method public static params(I)[F
     .locals 1
     const/4 v0, 0x4
@@ -43,7 +40,6 @@ if count != 1:
     raise SystemExit("Could not replace ModStack.params")
 stack_path.write_text(stack)
 
-# Keep exactly two user-facing Recents choices.
 arrays_path = root / "res/values/arrays.xml"
 arrays_text = arrays_path.read_text()
 def replace_string_array(source, name, items):
@@ -57,8 +53,8 @@ arrays_text = replace_string_array(arrays_text, "mod_recents_entries", ["Stock",
 arrays_text = replace_string_array(arrays_text, "mod_recents_values", ["0", "1"])
 arrays_path.write_text(arrays_text)
 
-# A clean install should use Stock by default. Find the preference tag by key,
-# then change only its defaultValue, regardless of attribute ordering.
+# Default clean installs to Stock so the custom stack style cannot be the
+# source of overlap during first-run testing. Preserve the iOS option.
 prefs_path = root / "res/xml/launcher_preferences.xml"
 prefs = prefs_path.read_text()
 key_match = re.search(r'<[^>]*\bandroid:key="mod_recents_style"[^>]*>', prefs)
@@ -67,12 +63,16 @@ if not key_match:
 tag = key_match.group(0)
 updated_tag, n = re.subn(r'android:defaultValue="[^"]*"', 'android:defaultValue="0"', tag, count=1)
 if n == 0:
-    updated_tag = tag[:-1] + ' android:defaultValue="0">' if tag.endswith('>') else tag
+    if tag.endswith("/>"):
+        updated_tag = tag[:-2] + ' android:defaultValue="0" />'
+    elif tag.endswith(">"):
+        updated_tag = tag[:-1] + ' android:defaultValue="0">'
+    else:
+        raise SystemExit("Malformed mod_recents_style preference tag")
 prefs = prefs[:key_match.start()] + updated_tag + prefs[key_match.end():]
 prefs_path.write_text(prefs)
 
-# Dock: don't skip drawing the glass/background merely because Hotseat's alpha
-# briefly drops during swipe transitions. The parent still composites the view alpha.
+# Keep Dock Studio's glass/background draw path alive during swipe transitions.
 dock_path = find_smali("com/android/launcher3/DockBlur.smali")
 dock = dock_path.read_text()
 alpha_gate = re.compile(
