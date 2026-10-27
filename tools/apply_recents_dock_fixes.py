@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep stock Quickstep paging intact and implement a safe iOS-style stacked-card transform."""
+"""Keep Quickstep in control of Recents transforms and default to stock layout."""
 from pathlib import Path
 import re
 import sys
@@ -12,17 +12,15 @@ def find_smali(rel):
         raise SystemExit(f"Expected one {rel}, found {matches}")
     return matches[0]
 
-# Recents: restore stock paging and scrolling behavior. Only clear residual transforms;
-# do not calculate card positions or offsets in ModStack.
+# The patched ModStack.apply callback can be reached during paging and launch
+# transitions. Do not overwrite TaskView transforms there: Quickstep must own
+# those animated values.
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
     .locals 0
-    # Quickstep owns TaskView transforms and animations. Never write transforms
-    # from this callback: it is invoked during paging/transition frames.
     return-void
 .end method"""
-
 stack, count = re.subn(
     r"(?s)\.method public static apply\(Landroid/view/ViewGroup;\)V.*?\.end method",
     apply_method, stack, count=1
@@ -30,6 +28,7 @@ stack, count = re.subn(
 if count != 1:
     raise SystemExit("Could not replace ModStack.apply")
 
+# Do not return stale iOS-stack transform parameters.
 params_method = r""".method public static params(I)[F
     .locals 1
     const/4 v0, 0x4
@@ -44,7 +43,7 @@ if count != 1:
     raise SystemExit("Could not replace ModStack.params")
 stack_path.write_text(stack)
 
-# Keep exactly two user-facing Recents choices: Stock and iOS 26 stacked.
+# Keep exactly two user-facing Recents choices.
 arrays_path = root / "res/values/arrays.xml"
 arrays_text = arrays_path.read_text()
 def replace_string_array(source, name, items):
@@ -58,6 +57,19 @@ arrays_text = replace_string_array(arrays_text, "mod_recents_entries", ["Stock",
 arrays_text = replace_string_array(arrays_text, "mod_recents_values", ["0", "1"])
 arrays_path.write_text(arrays_text)
 
+# A clean install should use Stock by default. Find the preference tag by key,
+# then change only its defaultValue, regardless of attribute ordering.
+prefs_path = root / "res/xml/launcher_preferences.xml"
+prefs = prefs_path.read_text()
+key_match = re.search(r'<[^>]*\bandroid:key="mod_recents_style"[^>]*>', prefs)
+if not key_match:
+    raise SystemExit("Could not locate mod_recents_style preference in launcher_preferences.xml")
+tag = key_match.group(0)
+updated_tag, n = re.subn(r'android:defaultValue="[^"]*"', 'android:defaultValue="0"', tag, count=1)
+if n == 0:
+    updated_tag = tag[:-1] + ' android:defaultValue="0">' if tag.endswith('>') else tag
+prefs = prefs[:key_match.start()] + updated_tag + prefs[key_match.end():]
+prefs_path.write_text(prefs)
 
 # Dock: don't skip drawing the glass/background merely because Hotseat's alpha
 # briefly drops during swipe transitions. The parent still composites the view alpha.
@@ -78,4 +90,4 @@ if count != 1:
     raise SystemExit("Could not locate DockBlur alpha early-return gate")
 dock_path.write_text(dock)
 
-print("Disabled custom Recents transforms to preserve native Quickstep card layout and animations; applied Dock Studio swipe-fade drawing.")
+print("Applied Quickstep-owned Recents transforms, Stock default, and Dock Studio swipe-fade drawing.")
