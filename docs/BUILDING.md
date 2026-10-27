@@ -15,9 +15,9 @@ The workflow builds the **complete patched project**, including its resource tab
 
 ## Feature status
 
-See `docs/FEATURE_IMPLEMENTATION_STATUS.md` for the per-feature status. Feature 1 is the existing Icon Lab shape chooser (System default, One UI-style squircle, rounded square, and circle). The successful build confirms that its code and settings resources are packaged; **it does not prove the settings appear or the shapes behave correctly on a device**.
+See `docs/FEATURE_IMPLEMENTATION_STATUS.md` for the per-feature status. Feature 1 is the Icon Lab shape chooser (System default, One UI-style squircle, rounded square, and circle). Feature 2 adds adaptive-icon foreground zoom and safe-zone padding controls. The successful build confirms their code and settings resources are packaged; **it does not prove the settings appear or behave correctly on a device**.
 
-Foreground zoom/inset controls, per-app shape overrides, expanded icon-pack search/preview, new animation engines, folder animation overrides, home-screen multi-select, and full Recents validation remain separate work items. Do not infer those features from a green CI run.
+Per-app shape overrides, expanded icon-pack search/preview, new animation engines, folder animation overrides, home-screen multi-select, and full Recents validation remain separate work items. Foreground zoom and safe-zone padding are now packaged but still need on-device testing. Do not infer those features from a green CI run.
 
 ## Device safety
 
