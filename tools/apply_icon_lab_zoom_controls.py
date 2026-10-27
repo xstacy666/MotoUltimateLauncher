@@ -24,33 +24,30 @@ if method_end < 0:
     raise SystemExit("Could not find end of initPreference method")
 method = settings_text[method_start:method_end]
 if ":mod_null_preference_key" not in method:
-    # Guard whichever register receives getKey(); don't assume register v0 or
-    # a particular method visibility/return type.
+    # Protect every hashCode() dispatch in initPreference; compiler output may
+    # use Object.hashCode rather than String.hashCode and may not immediately
+    # follow getKey().
     pattern = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)move-result-object (?P<reg>[vp]\d+)\n"
-        r"(?P<indent2>[ \t]*)invoke-virtual \{(?P=reg)\}, Ljava/lang/Object;->hashCode\(\)I"
+        r"(?m)^(?P<indent>[ \\t]*)invoke-virtual \\{(?P<reg>[vp]\\d+)\\}, "
+        r"Ljava/lang/[^;]+;->hashCode\\(\\)I"
     )
-    match = pattern.search(method)
-    if not match:
-        raise SystemExit("Could not find getKey() result immediately hashed in initPreference")
-    reg = match.group("reg")
-    indent = match.group("indent2")
-    lines = match.group(0).splitlines()
-    guarded = (
-        lines[0]
-        + "\n" + indent + f"if-eqz {reg}, :mod_null_preference_key"
-        + "\n" + lines[1]
-    )
-    method = method[:match.start()] + guarded + method[match.end():]
+    matches = list(pattern.finditer(method))
+    if not matches:
+        raise SystemExit("Could not find hashCode() dispatch in initPreference")
+    for match in reversed(matches):
+        reg = match.group("reg")
+        indent = match.group("indent")
+        guard = indent + f"if-eqz {reg}, :mod_null_preference_key\\n"
+        method = method[:match.start()] + guard + method[match.start():]
     return_type = signature.group(1)
     if return_type == "V":
-        epilogue = "\n    :mod_null_preference_key\n    return-void\n"
+        epilogue = "\\n    :mod_null_preference_key\\n    return-void\\n"
     else:
-        epilogue = "\n    :mod_null_preference_key\n    const/4 v0, 0x1\n    return v0\n"
+        epilogue = "\\n    :mod_null_preference_key\\n    const/4 v0, 0x1\\n    return v0\\n"
     method += epilogue
     settings_text = settings_text[:method_start] + method + settings_text[method_end:]
     settings.write_text(settings_text)
-    print("Added null-key guard to LauncherSettingsFragment.initPreference.")
+    print(f"Added null-safe hashCode guards ({len(matches)} call(s)) to initPreference.")
 else:
     print("Null-key guard already present.")
 
