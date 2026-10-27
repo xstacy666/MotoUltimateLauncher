@@ -17,42 +17,11 @@ def find_smali(rel):
 stack_path = find_smali("com/android/launcher3/ModStack.smali")
 stack = stack_path.read_text()
 apply_method = r""".method public static apply(Landroid/view/ViewGroup;)V
-    .locals 12
-
-    :try_start_0
-    invoke-virtual {p0}, Landroid/view/ViewGroup;->getChildCount()I
-    move-result v1
-    const/4 v2, 0x0
-
-    :loop
-    if-ge v2, v1, :cond_done
-    invoke-virtual {p0, v2}, Landroid/view/ViewGroup;->getChildAt(I)Landroid/view/View;
-    move-result-object v3
-    instance-of v4, v3, Lcom/android/quickstep/views/TaskView;
-    if-eqz v4, :next
-
-    # Preserve stock RecentsView paging/layout. Do not translate cards by child index:
-    # those offsets fight Quickstep's live scroll/animation positions and push cards offscreen.
-        :reset
-    const/4 v9, 0x0
-    invoke-virtual {v3, v9}, Landroid/view/View;->setTranslationX(F)V
-    invoke-virtual {v3, v9}, Landroid/view/View;->setRotationY(F)V
-    invoke-virtual {v3, v9}, Landroid/view/View;->setRotationX(F)V
-    invoke-virtual {v3, v9}, Landroid/view/View;->setRotation(F)V
-    invoke-virtual {v3, v9}, Landroid/view/View;->setTranslationZ(F)V
-
-    :next
-    add-int/lit8 v2, v2, 0x1
-    goto :loop
-
-    :cond_done
-    :try_end_0
-    .catch Ljava/lang/Throwable; {:try_start_0 .. :try_end_0} :catch_0
+    .locals 0
+    # Keep Quickstep fully in control of TaskView translations and swipe animations.
+    # The previous custom transforms caused Recents cards to leave the viewport while scrolling.
     return-void
-    :catch_0
-    move-exception v0
-    return-void
-.end method"""
+.end method
 
 stack, count = re.subn(
     r"(?s)\.method public static apply\(Landroid/view/ViewGroup;\)V.*?\.end method",
