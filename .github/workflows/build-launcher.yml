@@ -93,6 +93,9 @@ jobs:
             echo "Unsigned APK SHA-256:"
             cat work/output/apk-sha256.txt
           } > MotoLauncher3-build-report.txt
+      - name: Reject builds without compiled Recents changes
+        shell: bash
+        run: bash tools/verify_compiled_changes.sh source/MotoLauncher3_Ultimate.apk MotoLauncher3-Ultimate-unsigned.apk
       - name: Verify custom settings resources
         run: bash tools/verify_feature_resources.sh MotoLauncher3-Ultimate-unsigned.apk
       - name: Sign and verify APK
