@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v4
       - name: Install Android build tools and inspect original resources
         run: |
           set -euo pipefail
