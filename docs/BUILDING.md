@@ -1,23 +1,23 @@
 # Build Moto Launcher APK in GitHub Actions
 
-## Required inputs
+## Build input
 
-The repository needs both files:
+The build workflow uses:
 
-- `source/MotoLauncher3_Ultimate_Patched_All.zip` — the patched Apktool source archive.
-- `source/MotoLauncher3_Ultimate.apk` — the original stock Motorola launcher APK used on the device.
-
-Upload the stock APK to the exact path above. The source ZIP alone is not enough: it contains decoded resources, and rebuilding those resources fails on private or OEM-only Android resource references.
+- `source/MotoLauncher3_Ultimate_Patched_All.zip` — the complete decoded Apktool project.
+- The archive must contain `apktool.yml`, Smali sources, and `ModStack.smali`.
 
 ## Run the build
 
 1. Open **Actions** in this repository.
-2. Select **Build Moto Launcher APK**.
-3. Choose **Run workflow** on `main` (or let the workflow run after uploading the stock APK).
-4. When complete, open the run and download **MotoLauncher3-Ultimate-CI-build** under Artifacts.
+2. Select **Build Moto Launcher APK (full patched source)**.
+3. Choose **Run workflow**, or push a change under `source/**` or to the workflow file.
+4. Download **MotoLauncher3-Ultimate-Patched-CI-build** from the completed run.
 
-The workflow decodes the stock APK with resources left untouched, copies the patched `ModStack.smali`, rebuilds, signs with a temporary CI test key, and verifies the signature. The CI signature will not match Motorola's platform signature. Keep a recovery path before testing any system-level replacement.
+The workflow extracts and builds the entire Apktool project with `apktool b --no-res`, rather than copying only one Smali file into a separately decoded stock APK. It signs with an ephemeral CI test key, verifies the signature and checks the package name, then publishes a build report with the APK SHA-256 and DEX inventory.
 
-## Current scope
+## Important status and limitations
 
-This workflow builds the existing Recents-style patch. It does not yet implement missing features such as icon zoom/inset controls, new app-opening transitions, folder animations, or home-screen multi-select; those still need code-level implementation and on-device validation.
+**A successful build is not proof that the requested feature set is implemented or works on a device.** The existing feature specification remains a plan until code changes are present in the actual launcher code and tested. In particular, icon zoom/insets, icon-pack controls, Dock Studio, OEM-inspired animation choices, folders/multi-select, and Recents repair must not be treated as complete just because the APK builds.
+
+The CI signature is not Motorola's platform signature. Do not replace the system launcher or flash this APK without a verified backup and a recovery path. A package/signature check also does not prove device installability or runtime stability; those require testing on the target Motorola Edge 50 Pro / Android 16 build.
