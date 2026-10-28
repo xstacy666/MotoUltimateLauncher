@@ -54,7 +54,7 @@ jobs:
           # fails Android's verifier (register v6 is undefined), causing launcher crash loops.
           python3 tools/apply_dock_visibility_fix.py "$PATCHED_ROOT"
           bash tools/prepare_resource_build.sh "$PATCHED_ROOT"
-          python3 tools/apply_icon_pack_controls.py "$PATCHED_ROOT"
+          python3 tools/apply_icon_pack_controls_v2.py "$PATCHED_ROOT"
           echo "PATCHED_ROOT=$PATCHED_ROOT" >> "$GITHUB_ENV"
           echo "DECODED=work/decoded" >> "$GITHUB_ENV"
           find "$PATCHED_ROOT" -maxdepth 1 -type d -name 'smali*' -print | sort > work/smali-roots.txt
