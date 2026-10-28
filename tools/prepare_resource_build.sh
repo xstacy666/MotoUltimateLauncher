@@ -47,3 +47,6 @@ if remaining:
     raise SystemExit("Unresolved private Android framework references:\n" + "\n".join(remaining))
 print("Patched four Android private-framework resource references for SDK-independent linking.")
 PY
+
+# The OEM settings initializer assumes every Preference has a non-null key.
+python3 "$(dirname "$0")/fix_settings_null_keys.py" "$ROOT"
