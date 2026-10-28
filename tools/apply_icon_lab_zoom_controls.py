@@ -131,6 +131,11 @@ draw_method = r""".method public static draw(Landroid/graphics/drawable/Drawable
     :draw_default_masked
     invoke-virtual {p0, p1}, Landroid/graphics/drawable/Drawable;->draw(Landroid/graphics/Canvas;)V
 
+    if-eqz v4, :draw_default_return
+
+    invoke-virtual {v4, v6, v7, v8, v9}, Landroid/graphics/drawable/Drawable;->setBounds(IIII)V
+
+    :draw_default_return
     return-void
 
     :process_custom_shape
