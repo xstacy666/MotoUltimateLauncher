@@ -51,7 +51,7 @@ jobs:
           apktool d -f -r "$ORIGINAL" -o work/decoded
           cp -a work/decoded/smali work/baseline-smali
           python3 tools/apply_icon_lab_zoom_controls.py "$PATCHED_ROOT"
-          python3 tools/apply_recents_dock_fixes.py "$PATCHED_ROOT"
+          python3 tools/apply_dock_visibility_fix.py "$PATCHED_ROOT"
           bash tools/prepare_resource_build.sh "$PATCHED_ROOT"
           echo "PATCHED_ROOT=$PATCHED_ROOT" >> "$GITHUB_ENV"
           echo "DECODED=work/decoded" >> "$GITHUB_ENV"
