@@ -50,7 +50,8 @@ jobs:
           test -f "$PATCHED_ROOT/smali/com/android/launcher3/ModStack.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/launcher3/ModStack.smali"
           apktool d -f -r "$ORIGINAL" -o work/decoded
           cp -a work/decoded/smali work/baseline-smali
-          python3 tools/apply_icon_lab_zoom_controls.py "$PATCHED_ROOT"
+          # Do not run apply_icon_lab_zoom_controls.py: its rewritten ModShape.draw()
+          # fails Android's verifier (register v6 is undefined), causing launcher crash loops.
           python3 tools/apply_dock_visibility_fix.py "$PATCHED_ROOT"
           bash tools/prepare_resource_build.sh "$PATCHED_ROOT"
           echo "PATCHED_ROOT=$PATCHED_ROOT" >> "$GITHUB_ENV"
@@ -62,8 +63,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # The APK is assembled from PATCHED_ROOT, not DECODED. Restore stock Quickstep
-          # files into PATCHED_ROOT itself so the build cannot ship the stale Recents code.
           find "$PATCHED_ROOT" -type d -path '*/com/android/quickstep' -prune -exec rm -rf {} +
           while IFS= read -r STOCK_ROOT; do
             if [ -d "$STOCK_ROOT/com/android/quickstep" ]; then
@@ -72,7 +71,6 @@ jobs:
               cp -a "$STOCK_ROOT/com/android/quickstep" "$PATCHED_ROOT/$NAME/com/android/"
             fi
           done < <(find "$DECODED" -maxdepth 1 -type d -name 'smali*' -print | sort)
-
           restore_stock_file() {
             local REL="$1"
             find "$PATCHED_ROOT" -type f -path "*/$REL" -delete
@@ -88,7 +86,6 @@ jobs:
           restore_stock_file 'com/android/launcher3/uioverrides/QuickstepLauncher.smali'
           restore_stock_file 'com/android/systemui/shared/system/QuickStepContract.smali'
           restore_stock_file 'com/android/systemui/animation/ActivityTransitionAnimator$AnimationDelegate.smali'
-
           test -f "$PATCHED_ROOT/smali/com/android/quickstep/views/RecentsView.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/quickstep/views/RecentsView.smali"
           test -f "$PATCHED_ROOT/smali/com/android/quickstep/views/TaskView.smali" -o -f "$PATCHED_ROOT/smali_classes2/com/android/quickstep/views/TaskView.smali"
           echo "Restored stock RecentsView, TaskView, and the complete Quickstep package from the original APK."
