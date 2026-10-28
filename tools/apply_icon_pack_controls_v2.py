@@ -10,19 +10,40 @@ if len(xml_files) != 1:
     raise SystemExit("Expected one launcher_preferences.xml")
 xml_path = xml_files[0]
 xml = xml_path.read_text(encoding="utf-8")
-if 'android:key="mod_icon_pack_enabled"' not in xml:
-    marker = '<com.android.launcher3.widget.ModIconPackPreference'
-    start = xml.find(marker)
-    if start < 0:
-        raise SystemExit("Existing icon pack preference not found")
-    end = xml.find("/>", start)
-    if end < 0:
-        raise SystemExit("Icon pack preference tag is malformed")
-    end += 2
-    switch = '\n        <androidx.preference.SwitchPreferenceCompat android:key="mod_icon_pack_enabled" android:title="Enable icon pack" android:summary="Turn the selected third-party icon pack on or off" android:defaultValue="true" />'
-    xml = xml[:end] + switch + xml[end:]
-    xml_path.write_text(xml, encoding="utf-8")
-    print("Added icon pack enable switch")
+
+# Move the picker and enable switch into a clearly visible top-level category.
+import re
+picker_matches = list(re.finditer(
+    r'<com\\.android\\.launcher3\\.widget\\.ModIconPackPreference\\b[^>]*/>', xml, re.S
+))
+if len(picker_matches) != 1:
+    raise SystemExit(f"Expected one icon-pack picker XML node, found {len(picker_matches)}")
+picker = picker_matches[0].group(0)
+xml = xml[:picker_matches[0].start()] + xml[picker_matches[0].end():]
+
+switch_matches = list(re.finditer(
+    r'<androidx\\.preference\\.SwitchPreferenceCompat\\b(?=[^>]*android:key="mod_icon_pack_enabled")[^>]*/>', xml, re.S
+))
+if len(switch_matches) > 1:
+    raise SystemExit("Found duplicate icon-pack enable switches")
+if switch_matches:
+    switch = switch_matches[0].group(0)
+    xml = xml[:switch_matches[0].start()] + xml[switch_matches[0].end():]
+else:
+    switch = '<androidx.preference.SwitchPreferenceCompat android:key="mod_icon_pack_enabled" android:title="Enable icon pack" android:summary="Turn the selected third-party icon pack on or off" android:defaultValue="true" />'
+
+root_match = re.search(r'<(?:androidx\\.preference\\.)?PreferenceScreen\\b[^>]*>', xml)
+if not root_match:
+    raise SystemExit("Could not find root PreferenceScreen in launcher_preferences.xml")
+category = (
+    '\\n    <PreferenceCategory android:key="icon_pack_controls" android:title="Icon pack controls">'
+    + '\\n        ' + picker
+    + '\\n        ' + switch
+    + '\\n    </PreferenceCategory>\\n'
+)
+xml = xml[:root_match.end()] + category + xml[root_match.end():]
+xml_path.write_text(xml, encoding="utf-8")
+print("Placed icon-pack picker and enable switch in a visible top-level category")
 
 pack_files = list(root.glob("smali*/com/android/launcher3/ModIconPack.smali"))
 if len(pack_files) != 1:
