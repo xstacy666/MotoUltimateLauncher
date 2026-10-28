@@ -93,6 +93,7 @@ jobs:
           echo "Primary Smali differences from stock:"
           sed -n '1,80p' work/smali-diff.txt
           find "$PATCHED_ROOT" -type f -name '*.smali' | wc -l | tee work/smali-count.txt
+          mkdir -p work/output
           {
             echo '===== ModIconPack implementation ====='
             find "$PATCHED_ROOT" -type f -path '*/com/android/launcher3/ModIconPack.smali' -print -exec cat {} \;
