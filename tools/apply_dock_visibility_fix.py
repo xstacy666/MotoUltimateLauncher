@@ -11,14 +11,14 @@ if len(matches) != 1:
 path = matches[0]
 text = path.read_text()
 alpha_gate = re.compile(
-    r"(?m)^    invoke-virtual \\{p0\\}, Landroid/view/View;->getAlpha\\(\\)F\\s*\\n"
-    r"\\s*move-result v1\\s*\\n"
-    r"\\s*const v2, 0x3c23d70a[^\\n]*\\n"
-    r"\\s*cmpg-float v2, v1, v2\\s*\\n"
-    r"\\s*if-ltz v2, :cond_7\\s*\\n"
+    r"(?m)^    invoke-virtual .*->getAlpha\(\)F\s*\n"
+    r"\s*move-result v1\s*\n"
+    r"\s*const v2, 0x3c23d70a[^\n]*\n"
+    r"\s*cmpg-float v2, v1, v2\s*\n"
+    r"\s*if-ltz v2, :cond_7\s*\n"
 )
 updated, count = alpha_gate.subn(
-    "    invoke-virtual {p0}, Landroid/view/View;->getAlpha()F\\n\\n    move-result v1\\n",
+    "    invoke-virtual {p0}, Landroid/view/View;->getAlpha()F\n\n    move-result v1\n",
     text,
     count=1,
 )
