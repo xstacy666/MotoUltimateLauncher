@@ -97,6 +97,8 @@ jobs:
           {
             echo '===== ModIconPack implementation ====='
             find "$PATCHED_ROOT" -type f -path '*/com/android/launcher3/ModIconPack.smali' -print -exec cat {} \;
+            echo '===== ModIconPackPreference implementation ====='
+            find "$PATCHED_ROOT" -type f -name 'ModIconPackPreference.smali' -print
             echo '===== Icon pack settings and resource references ====='
             grep -RniE 'icon.?pack|appfilter|iconpack' "$PATCHED_ROOT/res/xml" "$PATCHED_ROOT/res/values" 2>/dev/null || true
           } > work/output/iconpack-analysis.txt
