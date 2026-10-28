@@ -14,7 +14,7 @@ xml = xml_path.read_text(encoding="utf-8")
 # Move the picker and enable switch into a clearly visible top-level category.
 import re
 picker_matches = list(re.finditer(
-    r'<com\\.android\\.launcher3\\.widget\\.ModIconPackPreference\\b[^>]*/>', xml, re.S
+    r'<com\.android\.launcher3\.widget\.ModIconPackPreference\b[^>]*/>', xml, re.S
 ))
 if len(picker_matches) != 1:
     raise SystemExit(f"Expected one icon-pack picker XML node, found {len(picker_matches)}")
@@ -22,7 +22,7 @@ picker = picker_matches[0].group(0)
 xml = xml[:picker_matches[0].start()] + xml[picker_matches[0].end():]
 
 switch_matches = list(re.finditer(
-    r'<androidx\\.preference\\.SwitchPreferenceCompat\\b(?=[^>]*android:key="mod_icon_pack_enabled")[^>]*/>', xml, re.S
+    r'<androidx\.preference\.SwitchPreferenceCompat\b(?=[^>]*android:key="mod_icon_pack_enabled")[^>]*/>', xml, re.S
 ))
 if len(switch_matches) > 1:
     raise SystemExit("Found duplicate icon-pack enable switches")
@@ -32,14 +32,14 @@ if switch_matches:
 else:
     switch = '<androidx.preference.SwitchPreferenceCompat android:key="mod_icon_pack_enabled" android:title="Enable icon pack" android:summary="Turn the selected third-party icon pack on or off" android:defaultValue="true" />'
 
-root_match = re.search(r'<(?:androidx\\.preference\\.)?PreferenceScreen\\b[^>]*>', xml)
+root_match = re.search(r'<(?:androidx\.preference\.)?PreferenceScreen\b[^>]*>', xml)
 if not root_match:
     raise SystemExit("Could not find root PreferenceScreen in launcher_preferences.xml")
 category = (
-    '\\n    <PreferenceCategory android:key="icon_pack_controls" android:title="Icon pack controls">'
-    + '\\n        ' + picker
-    + '\\n        ' + switch
-    + '\\n    </PreferenceCategory>\\n'
+    '\n    <PreferenceCategory android:key="icon_pack_controls" android:title="Icon pack controls">'
+    + '\n        ' + picker
+    + '\n        ' + switch
+    + '\n    </PreferenceCategory>\n'
 )
 xml = xml[:root_match.end()] + category + xml[root_match.end():]
 xml_path.write_text(xml, encoding="utf-8")
