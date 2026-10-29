@@ -1,0 +1,103 @@
+name: Package KSU Alpha Module
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/alpha-ksu-module]
+    paths:
+      - 'source/com.motorola.launcher3.apk'
+      - '.github/workflows/package-ksu-alpha.yml'
+      - 'module/**'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build KernelSU module ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="source/com.motorola.launcher3.apk"
+          test -s "$APK"
+          unzip -tq "$APK"
+          ROOT="opium_moto_ultimate_launcher"
+          mkdir -p "$ROOT/system_ext/priv-app/Launcher3QuickStep"
+          cp "$APK" "$ROOT/system_ext/priv-app/Launcher3QuickStep/Launcher3QuickStep.apk"
+          cat > "$ROOT/module.prop" <<'PROP'
+          id=opium_moto_ultimate_launcher
+          name=Øpium • Moto Ultimate Launcher
+          version=Alpha-PreRelease-1
+          versionCode=118
+          author=Øpium
+          description=Experimental systemless Moto launcher replacement for Edge 50 Pro Android 16; reboot after uninstall to clear stale mounts.
+          PROP
+          cat > "$ROOT/service.sh" <<'SERVICE'
+          #!/system/bin/sh
+          MODDIR=${0%/*}
+          SRC="$MODDIR/system_ext/priv-app/Launcher3QuickStep/Launcher3QuickStep.apk"
+          DSTDIR="/system_ext/priv-app/Launcher3QuickStep"
+          DST="$DSTDIR/Launcher3QuickStep.apk"
+          LOG="$MODDIR/service.log"
+          log() { echo "$(date '+%F %T') [service] $*" >> "$LOG"; }
+          i=0
+          while [ "$i" -lt 60 ]; do
+            [ -d "$DSTDIR" ] && [ -f "$SRC" ] && [ -f "$DST" ] && break
+            sleep 2
+            i=$((i + 1))
+          done
+          if [ ! -f "$SRC" ] || [ ! -f "$DST" ]; then
+            log "ERROR: source or target APK missing"
+            exit 1
+          fi
+          chmod 0644 "$SRC" 2>/dev/null
+          chown 0:0 "$SRC" 2>/dev/null
+          if grep -F "$SRC" /proc/self/mountinfo | grep -Fq "$DST"; then
+            log "Replacement already mounted"
+            exit 0
+          fi
+          mount -o bind "$SRC" "$DST"
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            log "ERROR: mount -o bind failed, exit=$rc"
+            exit "$rc"
+          fi
+          restorecon "$DST" 2>/dev/null
+          if grep -F "$SRC" /proc/self/mountinfo | grep -Fq "$DST"; then
+            log "SUCCESS: replacement bind mount verified at $DST"
+          else
+            log "WARNING: mount returned success; verification inconclusive"
+          fi
+          SERVICE
+          cat > "$ROOT/uninstall.sh" <<'UNINSTALL'
+          #!/system/bin/sh
+          DST="/system_ext/priv-app/Launcher3QuickStep/Launcher3QuickStep.apk"
+          LOG="/data/adb/modules/opium_moto_ultimate_launcher/uninstall.log"
+          echo "$(date '+%F %T') attempting unmount $DST" >> "$LOG"
+          n=0
+          while [ "$n" -lt 5 ]; do
+            grep -Fq " $DST " /proc/self/mountinfo || exit 0
+            umount "$DST" 2>/dev/null || umount -l "$DST" 2>/dev/null
+            n=$((n + 1))
+          done
+          echo "$(date '+%F %T') cleanup attempted; reboot if mount persists" >> "$LOG"
+          UNINSTALL
+          cat > "$ROOT/README.md" <<'MODREADME'
+          Øpium Moto Ultimate Launcher — Alpha pre-release
+
+          Install via KernelSU and reboot. Remove any older module and reboot before installing this build to clear stale mounts. Check service.log as root. On uninstall, reboot to ensure stale mounts in all namespaces are cleared.
+
+          Experimental target: Motorola Edge 50 Pro / Android 16. APK signature and runtime compatibility are not guaranteed. A successful bind mount does not prove the launcher loaded successfully.
+          MODREADME
+          chmod 0755 "$ROOT/service.sh" "$ROOT/uninstall.sh"
+          (cd "$ROOT" && zip -qr "../opium-moto-ultimate-ksu-alpha.zip" .)
+          unzip -tq opium-moto-ultimate-ksu-alpha.zip
+          sha256sum opium-moto-ultimate-ksu-alpha.zip | tee opium-moto-ultimate-ksu-alpha.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opium-moto-ultimate-ksu-alpha
+          path: |
+            opium-moto-ultimate-ksu-alpha.zip
+            opium-moto-ultimate-ksu-alpha.sha256
+          if-no-files-found: error
+          retention-days: 30
