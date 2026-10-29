@@ -1,45 +1,42 @@
-# Moto Launcher Ultimate
+# Øpium • Moto Ultimate Launcher
 
-A customization and recovery project for Motorola Launcher 3, targeting the Motorola Edge 50 Pro on Android 16.
+**Alpha / pre-release** — KernelSU systemless replacement module for the Motorola Edge 50 Pro on Android 16.
 
-> **Status: early project setup.** This repository starts with planning and audit documentation. No rebuilt or device-tested APK is claimed yet.
+> ⚠️ Experimental. This release has not been confirmed working across devices or ROM variants. Back up first and keep a recovery path.
 
-## Goals
+## Alpha module package
 
-- Preserve existing launcher behavior and custom modifications wherever possible.
-- Diagnose and fix distorted, extreme-3D Recents/Overview cards.
-- Expand icon handling: adaptive icons, optional masks, scaling/padding, icon-pack selection, search/preview, and per-app overrides.
-- Organize launcher settings into clear, searchable categories.
-- Add Dock Studio controls for background, blur/glass styling, dimensions, margins, corner radius, opacity, icon sizing, and spacing.
-- Add home-screen and app-drawer grid, labels, folders, search, sorting, and gesture controls.
-- Add original app-opening animation presets inspired by common OEM design patterns, within Android platform limits.
-- Add settings backup/restore, diagnostics, cache reset, launcher restart, and safe-recovery options.
+Use GitHub Actions → **Package KSU Alpha Module** to build a ZIP from `source/com.motorola.launcher3.apk`. Download the `opium-moto-ultimate-ksu-alpha` workflow artifact. This is an Actions artifact, not a published GitHub Release asset.
 
-## Device / platform target
-
+## Target
 - Device: Motorola Edge 50 Pro
-- Android: Android 16
-- Package string observed in initial archive audit: `com.motorola.launcher3`
-- Version-name string observed in initial archive audit: `16-mod-final`
+- Android: 16 (other versions unverified)
+- Package: `com.motorola.launcher3`
+- OEM path: `/system_ext/priv-app/Launcher3QuickStep/Launcher3QuickStep.apk`
+- Module ID: `opium_moto_ultimate_launcher`
 
-These strings are archive observations, not proof that the APK installs or works.
+## Install
+1. Keep the stock launcher APK and a recovery method available.
+2. Remove any older version of this module and reboot before installing this build. This clears stale bind mounts from older scripts.
+3. Install the generated ZIP in KernelSU and reboot.
+4. Inspect `/data/adb/modules/opium_moto_ultimate_launcher/service.log` as root.
+5. Verify the source and destination in `/proc/1/mountinfo`; a successful mount alone does not prove the launcher loaded.
 
-## Repository layout
+## Uninstall / rollback
+Remove the module in KernelSU and reboot. The uninstall hook attempts to unmount its replacement; reboot is the reliable fallback for stale mounts or separate namespaces. If the launcher crashes, disable/remove the module and reboot.
 
-- `docs/ROADMAP.md` — staged implementation plan and acceptance criteria
-- `docs/APK_AUDIT.md` — initial binary audit and known limitations
-- `docs/SAFETY.md` — backup, installation, rollback, and signing cautions
+## Current feature/mod status
+- Systemless replacement at OEM path — module script implemented; device verification required.
+- Mount logging and verification — included.
+- Uninstall cleanup hook — included; reboot recommended.
+- APK features — inherited from the repository APK; not independently validated by this module release.
+- Recents/Overview fixes, extra icon-pack support, and advanced settings — not claimed complete without a tested APK build.
 
-## Safety
+## Docs
+- [Changelog](CHANGELOG.md)
+- [APK audit](docs/APK_AUDIT.md)
+- [Safety and rollback](docs/SAFETY.md)
+- [Decompilation workflow](docs/DECOMPILING_APK.md)
 
-Do not install a modified launcher system APK until its signature, Android version compatibility, target path, and rollback plan are verified. Recents/Overview may be controlled by System UI/Quickstep and Motorola framework code, not only launcher resources.
-
-## Next steps
-
-1. Establish exact APK inputs and record hashes.
-2. Identify source lineage and licensing obligations.
-3. Set up Android reverse-engineering/build tooling.
-4. Reproduce and diagnose the Recents distortion before making a narrow fix.
-5. Implement features incrementally and test on the target device.
-
-No feature is complete until implemented, built, and tested.
+## Signing warning
+A replacement APK signed with a different certificate may be rejected or behave incorrectly as a privileged OEM system app. Check Package Manager and logcat; a successful bind mount is not proof of package acceptance. No feature is marked complete solely because a build or mount command succeeds.
